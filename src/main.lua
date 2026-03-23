@@ -54,22 +54,22 @@ local function on_reload()
 	import 'reload.lua'
 end
 
-local function on_ready_late()
-	-- what to do when we are ready after all other mods
-	--   but not re-do on reload.
-	if config.enabled == false then return end
+-- local function on_ready_late()
+-- 	-- what to do when we are ready after all other mods
+-- 	--   but not re-do on reload.
+-- 	if config.enabled == false then return end
 
-	import 'ready_late.lua'
-end
+-- 	import 'ready_late.lua'
+-- end
 
-local function on_reload_late()
-	-- what to do when we are ready after all other mods
-	--   but also again on every reload.
-	-- only do things that are safe to run over and over.
-	if config.enabled == false then return end
+-- local function on_reload_late()
+-- 	-- what to do when we are ready after all other mods
+-- 	--   but also again on every reload.
+-- 	-- only do things that are safe to run over and over.
+-- 	if config.enabled == false then return end
 
-	import 'reload_late.lua'
-end
+-- 	import 'reload_late.lua'
+-- end
 
 -- this allows us to limit certain functions to not be reloaded.
 local loader = reload.auto_multiple()

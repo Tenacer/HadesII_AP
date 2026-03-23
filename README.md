@@ -1,15 +1,10 @@
-# Mod name
-
-Hades II mod allowing to do some super duper thing.
+# HadesII_AP
+Hades II mod to enable its AP World implementation.
 
 ## Features
 
-- Wow.
-- Much cool.
-  - Very doge.
+It allows spawning items, region locking and sending deaths to the client.
 
 ## Install
 
-- Do this.
-- Do that.
-  - Nope, not that.
+Not ready for installation yet.
