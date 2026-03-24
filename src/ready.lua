@@ -18,10 +18,31 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	return base(...)
 end)
 
-game.OnControlPressed({'Gift', function()
-	return trigger_Gift()
+game.OnControlPressed({'Death', function()
+	return trigger_Death()
 end})
 
+-- Unlock all grasp
+-- modutil.mod.Path.Set("MetaUpgradeCostData.StartingMetaUpgradeLimit", config.starting_grasp) -- DOESN'T WORK
+-- modutil.mod.Path.Set("MetaUpgradeCostData.MetaUpgradeLevelData", {
+-- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
+
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+
+-- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
+-- 	})
 
 -- Everything below this line is part of the example mod creation guide,
 -- which you can find on our wiki, replacing Schelemeus portrait:
