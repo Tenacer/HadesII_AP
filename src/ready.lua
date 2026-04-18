@@ -13,17 +13,34 @@ sjson.hook(file, function(data)
 	return sjson_ShellText(data)
 end)
 
+game.OnControlPressed({'Gift', function()
+	return give_Ashes(10)
+end})
+
 modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	prefix_SetupMap()
 	return base(...)
 end)
 
-game.OnControlPressed({'Death', function()
-	return trigger_Death()
-end})
+modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEncounter)
+	local result = base(currentRoom, currentEncounter)
+	on_room_cleared(currentRoom, currentEncounter)
+	return result
+end)
+
+modutil.mod.Path.Wrap("SpawnRoomReward", function(base, eventSource, args)
+	if should_replace_reward(CurrentRun and CurrentRun.CurrentRoom) then
+		print("[HadesII_AP] Boss reward suppressed — pending AP item")
+		return
+	end
+	return base(eventSource, args)
+end)
+
+-- game.OnControlPressed({'Death', function()
+-- 	return trigger_Death()
+-- end})
 
 -- Unlock all grasp
--- modutil.mod.Path.Set("MetaUpgradeCostData.StartingMetaUpgradeLimit", config.starting_grasp) -- DOESN'T WORK
 -- modutil.mod.Path.Set("MetaUpgradeCostData.MetaUpgradeLevelData", {
 -- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
 -- 		{ CostIncrease = 2, ResourceCost = { MemPointsCommon = 0 }},
@@ -43,6 +60,8 @@ end})
 
 -- 		{ CostIncrease = 1, ResourceCost = { MemPointsCommon = 0 }},
 -- 	})
+
+
 
 -- Everything below this line is part of the example mod creation guide,
 -- which you can find on our wiki, replacing Schelemeus portrait:
@@ -77,8 +96,8 @@ end})
 
 
 ------- Method 3: Adding the package to the list of packages loaded whenever Schelemeus is spawned
-local customPortraitsPackageName = _PLUGIN.guid .. "Portraits"
-table.insert(game.EnemyData.NPC_Skelly_01.LoadPackages, customPortraitsPackageName)
+-- local customPortraitsPackageName = _PLUGIN.guid .. "Portraits"
+-- table.insert(game.EnemyData.NPC_Skelly_01.LoadPackages, customPortraitsPackageName)
 
 
 -----------------------------------------------------------
@@ -87,18 +106,18 @@ table.insert(game.EnemyData.NPC_Skelly_01.LoadPackages, customPortraitsPackageNa
 
 -- All packages built by `deppth2 hpk` will have the package name as part of all file paths, to prevent mods from clashing
 -- If you added any nested folders in your package, include them here as well
-local newPortraitFilePath = _PLUGIN.guid .. "Portraits\\Portraits_Skelly_01"
+-- local newPortraitFilePath = _PLUGIN.guid .. "Portraits\\Portraits_Skelly_01"
 
 -- rom.path.combine is provided by Hell2Modding to build file paths correctly across different operating systems
 -- rom.paths.Content() will return the path to the Content folder of the current Hades II installation
-local guiPortraitsVFXFile = rom.path.combine(rom.paths.Content(), "Game\\Animations\\GUI_Portraits_VFX.sjson")
+-- local guiPortraitsVFXFile = rom.path.combine(rom.paths.Content(), "Game\\Animations\\GUI_Portraits_VFX.sjson")
 
-sjson.hook(guiPortraitsVFXFile, function(data)
-  for _, entry in ipairs(data.Animations) do
-    if entry.Name == "Portrait_Skelly_Default_01" or entry.Name == "Portrait_Skelly_Default_01_Exit" then
-      entry.FilePath = newPortraitFilePath
-			entry.CreateAnimations = {}
-			entry.OffsetY = 0
-    end
-  end
-end)
+-- sjson.hook(guiPortraitsVFXFile, function(data)
+--   for _, entry in ipairs(data.Animations) do
+--     if entry.Name == "Portrait_Skelly_Default_01" or entry.Name == "Portrait_Skelly_Default_01_Exit" then
+--       entry.FilePath = newPortraitFilePath
+-- 		entry.CreateAnimations = {}
+-- 		entry.OffsetY = 0
+--     end
+--   end
+-- end)
