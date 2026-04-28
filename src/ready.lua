@@ -139,6 +139,22 @@ modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, gift
 	return result
 end)
 
+-- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
+
+-- ready_late.lua clears all GiftData.GameStateRequirements so the player can
+-- gift any NPC without story prerequisites. The side effect is that the keepsake
+-- rack screen uses those same (now-empty) requirements to compute Unlocked, so
+-- every keepsake appears available. Override Unlocked here with a direct
+-- GiftPresentation lookup — the same field GiftLogic and give_item both write.
+modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, args)
+	local settings = ap_load_settings()
+	if settings and args and args.UpgradeData and args.UpgradeData.Gift then
+		local gift_id = args.UpgradeData.Gift
+		args.UpgradeData.Unlocked = (GameState.GiftPresentation[gift_id] == true)
+	end
+	return base(screen, components, args)
+end)
+
 -- ── Death hook ────────────────────────────────────────────────────────────────
 
 -- KillHero is the hero-specific death handler in DeathLoopLogic.lua.
