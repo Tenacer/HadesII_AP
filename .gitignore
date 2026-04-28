@@ -10,3 +10,5 @@
 /build
 # For the Thunderstore CLI executable itself, if you include it in your root folder
 tcli.exe
+# Temp directory created by build_pkg.py
+/_build_tmp

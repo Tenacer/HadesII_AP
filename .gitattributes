@@ -9,3 +9,5 @@
 
 # Git LFS
 *.png filter=lfs diff=lfs merge=lfs -text
+*.pkg filter=lfs diff=lfs merge=lfs -text
+*.pkg_manifest filter=lfs diff=lfs merge=lfs -text
