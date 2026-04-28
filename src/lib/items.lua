@@ -31,14 +31,17 @@ function give_item(item_name)
 	-- Incantation: unlock the world upgrade and fire its effect.
 	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
 	if wu_key then
-		-- Set all GameState flags so the game considers it legitimately unlocked.
+		-- Set flags directly rather than via UnlockWorldUpgrade, because
+		-- UnlockWorldUpgrade skips WorldUpgrades[name]=true if WorldUpgradesAdded
+		-- is already set (which it is after a cauldronsanity AP purchase).
+		GameState.WorldUpgrades[wu_key]         = true
+		GameState.WorldUpgradesAdded[wu_key]    = true
 		GameState.WorldUpgradesViewed[wu_key]   = true
 		GameState.WorldUpgradesRevealed[wu_key] = true
-		UnlockWorldUpgrade(wu_key)
 		-- Fire the upgrade's effect (opens shops, unlocks systems, etc.).
 		local itemData = WorldUpgradeData and WorldUpgradeData[wu_key]
 		if itemData and itemData.OnActivateFinishedFunctionName then
-			CallFunctionName(itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
+			pcall(CallFunctionName, itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
 		end
 		print("[HadesII_AP] Incantation unlocked: " .. item_name)
 		return true

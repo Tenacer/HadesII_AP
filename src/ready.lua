@@ -89,23 +89,29 @@ end)
 
 -- ── Cauldron interception ────────────────────────────────────────────────────
 
--- All 86 AP-tracked incantations are instant (no CookTime), so they complete
--- inside DoGhostAdminPurchase rather than via UseCauldronCookComplete.
--- We temporarily null OnActivateFinishedFunctionName so the vanilla effect is
--- skipped, then send the AP location check after base() returns.
-modutil.mod.Path.Wrap("DoGhostAdminPurchase", function(base, screen, button)
+-- The real purchase entry point is HandleGhostAdminPurchase, not DoGhostAdminPurchase.
+-- HandleGhostAdminPurchase calls AddWorldUpgrade (vanilla effect) and THEN threads
+-- DoGhostAdminPurchase (presentation callbacks). Wrapping only DoGhostAdminPurchase
+-- was too late — the upgrade was already active in GameState.
+--
+-- Fix: wrap HandleGhostAdminPurchase to (1) suppress DoGhostAdminPurchase via a flag
+-- and (2) undo the AddWorldUpgrade side-effects before sending the AP check.
+local _ap_suppressed_purchases = {}
+
+modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local settings = ap_load_settings()
 	if settings and settings.cauldronsanity == 1 then
 		local itemData = button and button.Data
 		if itemData then
 			local ap_location = INCANTATION_LOCATIONS[itemData.Name]
 			if ap_location then
-				local savedFn   = itemData.OnActivateFinishedFunctionName
-				local savedArgs = itemData.OnActivateFinishedFunctionArgs
-				itemData.OnActivateFinishedFunctionName = nil
+				_ap_suppressed_purchases[itemData.Name] = true
 				base(screen, button)
-				itemData.OnActivateFinishedFunctionName = savedFn
-				itemData.OnActivateFinishedFunctionArgs = savedArgs
+				-- Undo only the active-effect flag. Keep WorldUpgradesAdded = true
+				-- so the cauldron UI shows the incantation as already purchased.
+				if GameState then
+					GameState.WorldUpgrades[itemData.Name] = nil
+				end
 				ap_check_location(ap_location)
 				return
 			end
@@ -114,18 +120,18 @@ modutil.mod.Path.Wrap("DoGhostAdminPurchase", function(base, screen, button)
 	return base(screen, button)
 end)
 
--- Override the "Incantation Complete" banner to show the AP logo and "AP Check Sent"
--- so the player knows the brew triggered an AP check, not a vanilla effect.
-modutil.mod.Path.Wrap("PostIncantationPresentationUnlockText", function(base, saleData)
-	local settings = ap_load_settings()
-	if settings and settings.cauldronsanity == 1 and INCANTATION_LOCATIONS[saleData.Name] then
-		local patched = {}
-		for k, v in pairs(saleData) do patched[k] = v end
-		patched.UnlockTextId = "APCheckSent"
-		patched.Icon = AP_ICON_ANIM
-		return base(patched)
+-- DoGhostAdminPurchase runs in a thread created by HandleGhostAdminPurchase.
+-- Skip it entirely for AP incantations so OnActivateFunctionName,
+-- OnActivateFinishedFunctionName, and resource callbacks don't fire.
+modutil.mod.Path.Wrap("DoGhostAdminPurchase", function(base, screen, button)
+	local itemData = button and button.Data
+	if itemData and _ap_suppressed_purchases[itemData.Name] then
+		_ap_suppressed_purchases[itemData.Name] = nil
+		print("[HadesII_AP] DoGhostAdminPurchase suppressed for: " .. itemData.Name)
+		ap_show_boss_reward_banner()
+		return
 	end
-	return base(saleData)
+	return base(screen, button)
 end)
 
 -- ── Keepsakesanity location check ────────────────────────────────────────────
