@@ -28,6 +28,19 @@ function ap_dir()
 	return _ap_dir
 end
 
+-- ── World identity ────────────────────────────────────────────────────────────
+-- world_id is written into ap_settings.json by the Python client on connect.
+-- It uniquely identifies the AP slot being played ({seed_name}_{slot}).
+-- All IPC files are suffixed with the world_id so that multiple Hades II worlds
+-- in the same generate don't share state, and switching worlds is safe.
+-- Note: settings are cached per hot-reload session; triggering a hot-reload
+-- (or restarting the game) is required when switching worlds mid-session.
+
+function ap_world_id()
+	local s = ap_load_settings()
+	return (s and s.world_id) or "default"
+end
+
 -- ── Outbox / inbox ────────────────────────────────────────────────────────────
 
 function ap_flush_outbox(extra)
@@ -44,14 +57,16 @@ function ap_flush_outbox(extra)
 	if extra then
 		for k, v in pairs(extra) do data[k] = v end
 	end
-	local f = io.open(ap_dir() .. "ap_out.json", "w")
-	if not f then print("[HadesII_AP] ERROR: could not write ap_out.json") return end
+	local fname = "ap_out_" .. ap_world_id() .. ".json"
+	local f = io.open(ap_dir() .. fname, "w")
+	if not f then print("[HadesII_AP] ERROR: could not write " .. fname) return end
 	f:write(json_val(data))
 	f:close()
 end
 
 function ap_read_inbox()
-	local f = io.open(ap_dir() .. "ap_in.json", "r")
+	local fname = "ap_in_" .. ap_world_id() .. ".json"
+	local f = io.open(ap_dir() .. fname, "r")
 	if not f then return nil end
 	local raw = f:read("*a")
 	f:close()

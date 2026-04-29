@@ -15,7 +15,7 @@
 
 local _state = nil
 
-local function state_path() return ap_dir() .. "ap_state.json" end
+local function state_path() return ap_dir() .. "ap_state_" .. ap_world_id() .. ".json" end
 
 function ap_load_state()
 	if _state then return _state end
