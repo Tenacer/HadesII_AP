@@ -3,17 +3,6 @@
 
 -- ── Item granting ─────────────────────────────────────────────────────────────
 
--- Called from the PlayerReceivedGiftPresentation hook in ready.lua.
--- Sends the AP location check when the player earns a keepsake by gifting an NPC.
-function on_keepsake_received_presentation(npc, giftName)
-	local settings = ap_load_settings()
-	if not (settings and settings.keepsakesanity == 1) then return end
-	local location = KEEPSAKE_LOCATION_FOR_GIFT[giftName]
-	if location then
-		ap_check_location(location)
-	end
-end
-
 function give_item(item_name)
 	-- Vow items: reverse_Fear only — unlock a rank of the corresponding shrine vow.
 	if get_shrine_for_vow_item(item_name) then

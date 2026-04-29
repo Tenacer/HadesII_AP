@@ -136,13 +136,25 @@ end)
 
 -- ── Keepsakesanity location check ────────────────────────────────────────────
 
--- Fires whenever the player visually receives a keepsake from an NPC.
--- Delegates to on_keepsake_received_presentation() which checks the keepsakesanity
--- setting and sends the AP location check if this is a tracked gifting event.
+-- Intercepts the vanilla keepsake-received presentation when keepsakesanity is on.
+-- GiftLogic.lua sets GiftPresentation[gift]=true and NewKeepsakeItem[gift]=true just
+-- before calling us, so we undo those to prevent the vanilla keepsake being granted.
+-- We then show our own AP banner (Archipelago logo, gift animations) and send the
+-- AP location check. CheckAchievement still runs after we return but is harmless
+-- since we cleared GiftPresentation[giftName].
 modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, giftName)
-	local result = base(npc, giftName)
-	on_keepsake_received_presentation(npc, giftName)
-	return result
+	local settings = ap_load_settings()
+	if settings and settings.keepsakesanity == 1 then
+		local location = KEEPSAKE_LOCATION_FOR_GIFT[giftName]
+		if location then
+			GameState.GiftPresentation[giftName] = nil
+			GameState.NewKeepsakeItem[giftName]  = nil
+			ap_show_keepsake_check_banner(npc)
+			ap_check_location(location)
+			return
+		end
+	end
+	return base(npc, giftName)
 end)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
