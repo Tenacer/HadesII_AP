@@ -71,13 +71,31 @@ function give_item(item_name)
 		print("[HadesII_AP] Gave Disintegration of Monstrosity (WorldUpgradeStormStop)")
 		return true
 	end
-	-- Keepsakes: unlock directly in GameState so the item appears in inventory.
+	-- Keepsakes: set GiftPresentation only if the location check was already sent.
+	-- If the item arrives before the player has gifted the NPC, leaving GiftPresentation
+	-- nil lets GiveGift still call PlayerReceivedGiftPresentation on the first gift so
+	-- our existing hook can fire and send the check. Once the check is sent (either
+	-- before or after this call), GiftPresentation is set and the equip screen unlocks.
 	local gift_id = KEEPSAKE_GIFT_IDS[item_name]
 	if gift_id then
 		GameState.GiftPresentation = GameState.GiftPresentation or {}
 		GameState.NewKeepsakeItem  = GameState.NewKeepsakeItem  or {}
-		GameState.GiftPresentation[gift_id] = true
-		GameState.NewKeepsakeItem[gift_id]  = true
+		GameState.NewKeepsakeItem[gift_id] = true
+		local settings = ap_load_settings()
+		local unlock = true
+		if settings and settings.keepsakesanity == 1 and KEEPSAKE_LOCATION_FOR_GIFT then
+			local location = KEEPSAKE_LOCATION_FOR_GIFT[gift_id]
+			if location then
+				unlock = false
+				local s = ap_load_state()
+				for _, sent in ipairs(s.checked_locations) do
+					if sent == location then unlock = true; break end
+				end
+			end
+		end
+		if unlock then
+			GameState.GiftPresentation[gift_id] = true
+		end
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
 		return true
 	end
