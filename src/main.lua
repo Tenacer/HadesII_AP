@@ -42,10 +42,6 @@ local function on_ready()
 	-- what to do when we are ready, but not re-do on reload.
 	if config.enabled == false then return end
 	mod = modutil.mod.Mod.Register(_PLUGIN.guid)
-
-	-- reload.lua defines all reloadable globals; prime them before ready.lua uses them,
-	-- because ReLoad calls on_ready before on_reload on the initial load.
-	import 'reload.lua'
 	import 'ready.lua'
 end
 

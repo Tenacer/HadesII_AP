@@ -7,6 +7,14 @@
 -- 	so you will most likely want to have it reference
 --	values and functions later defined in `reload_late.lua`.
 
+-- ── Initial startup calls ────────────────────────────────────────────────────
+
+-- These need reload.lua (imported in on_reload before on_ready_late fires).
+-- Patch incantation icons for the hub screen before the first SetupMap wrap fires.
+ap_patch_incantation_icons()
+-- Flush the outbox immediately so the Python client sees the game is running.
+ap_flush_outbox()
+
 -- ── GiftData fix ──────────────────────────────────────────────────────────────
 
 -- Clear GameStateRequirements from all GiftData gift-level entries so that AP can

@@ -64,5 +64,6 @@ function prefix_SetupMap()
 		.. ", checks: " .. state.checks_sent
 		.. ", items: "  .. state.items_index)
 	ap_apply_shrine_levels()
+	ap_init_weapon_state()
 	ap_process_inbox()
 end

@@ -13,6 +13,7 @@ import 'lib/items.lua'
 import 'lib/score.lua'
 import 'lib/death.lua'
 import 'lib/inbox.lua'
+import 'lib/weapons.lua'
 
 -- ── AP icon ───────────────────────────────────────────────────────────────────
 

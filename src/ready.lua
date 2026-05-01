@@ -11,24 +11,6 @@
 local ap_icon_pkg = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
 LoadPackages({ Name = ap_icon_pkg })
 
--- Reload the package on every room transition (game may evict it between rooms).
--- Also patch incantation icons here so they stay overridden after hot-reloads.
-local _orig_prefix_SetupMap = prefix_SetupMap
-function prefix_SetupMap(...)
-	LoadPackages({ Name = ap_icon_pkg })
-	ap_patch_incantation_icons()
-	if _orig_prefix_SetupMap then return _orig_prefix_SetupMap(...) end
-end
-
--- Patch icons once immediately at startup (covers the hub screen).
-ap_patch_incantation_icons()
-
--- ── Initial state flush ───────────────────────────────────────────────────────
-
--- Write the outbox immediately so the Python client knows the game is running
--- as soon as the mod loads, without waiting for the first room transition.
-ap_flush_outbox()
-
 -- ── Text patches ──────────────────────────────────────────────────────────────
 
 local file = rom.path.combine(rom.paths.Content, 'Game/Text/en/ShellText.en.sjson')
@@ -55,6 +37,10 @@ end})
 -- thread() requires SessionMapState to exist, which is only true once a map loads.
 local _polling_started = false
 modutil.mod.Path.Wrap("SetupMap", function(base, ...)
+	-- Reload the package each room (game may evict it) and re-patch icons
+	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
+	LoadPackages({ Name = ap_icon_pkg })
+	ap_patch_incantation_icons()
 	prefix_SetupMap()
 	if not _polling_started then
 		_polling_started = true
