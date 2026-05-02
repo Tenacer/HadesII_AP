@@ -75,15 +75,13 @@ end)
 
 -- ── Cauldron interception ────────────────────────────────────────────────────
 
--- The real purchase entry point is HandleGhostAdminPurchase, not DoGhostAdminPurchase.
--- HandleGhostAdminPurchase calls AddWorldUpgrade (vanilla effect) and THEN threads
--- DoGhostAdminPurchase (presentation callbacks). Wrapping only DoGhostAdminPurchase
--- was too late — the upgrade was already active in GameState.
---
--- Fix: wrap HandleGhostAdminPurchase to (1) suppress DoGhostAdminPurchase via a flag
--- and (2) undo the AddWorldUpgrade side-effects before sending the AP check.
-local _ap_suppressed_purchases = {}
-
+-- Don't call base() for AP incantations. Calling base() would invoke
+-- CloseGhostAdminScreen with the purchase button, which causes
+-- GhostAdminScreenClosedPresentation to take the incantation-animation branch
+-- (sets up CauldronBackgroundIllustration, no camera pan). The camera pan to
+-- hero only happens via the close-button branch of that function.
+-- Instead we replicate only what we need and pass screen.Components.CloseButton
+-- to CloseGhostAdminScreen so the camera correctly returns to Melinoe.
 modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local settings = ap_load_settings()
 	if settings and settings.cauldronsanity == 1 then
@@ -91,31 +89,19 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 		if itemData then
 			local ap_location = INCANTATION_LOCATIONS[itemData.Name]
 			if ap_location then
-				_ap_suppressed_purchases[itemData.Name] = true
-				base(screen, button)
-				-- Undo only the active-effect flag. Keep WorldUpgradesAdded = true
-				-- so the cauldron UI shows the incantation as already purchased.
+				GhostAdminItemPurchasedPresentation(button, itemData)
 				if GameState then
-					GameState.WorldUpgrades[itemData.Name] = nil
+					GameState.WorldUpgradesAdded[itemData.Name] = true
 				end
+				if CurrentRun then
+					CurrentRun.WorldUpgradesAdded[itemData.Name] = true
+				end
+				CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
 				ap_check_location(ap_location)
+				ap_show_boss_reward_banner()
 				return
 			end
 		end
-	end
-	return base(screen, button)
-end)
-
--- DoGhostAdminPurchase runs in a thread created by HandleGhostAdminPurchase.
--- Skip it entirely for AP incantations so OnActivateFunctionName,
--- OnActivateFinishedFunctionName, and resource callbacks don't fire.
-modutil.mod.Path.Wrap("DoGhostAdminPurchase", function(base, screen, button)
-	local itemData = button and button.Data
-	if itemData and _ap_suppressed_purchases[itemData.Name] then
-		_ap_suppressed_purchases[itemData.Name] = nil
-		print("[HadesII_AP] DoGhostAdminPurchase suppressed for: " .. itemData.Name)
-		ap_show_boss_reward_banner()
-		return
 	end
 	return base(screen, button)
 end)
