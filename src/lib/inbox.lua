@@ -43,6 +43,7 @@ function ap_process_inbox()
 			if give_item(item.item_name or "") then
 				state.items_index = idx + 1
 				granted = granted + 1
+				ap_notify_received(item.item_name or "")
 			end
 		end
 	end

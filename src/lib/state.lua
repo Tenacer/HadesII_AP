@@ -69,6 +69,7 @@ function ap_check_location(name)
 	end
 	table.insert(state.checked_locations, name)
 	print("[HadesII_AP] Location checked: " .. name)
+	ap_notify_sent(name)
 	ap_save_state()
 	ap_flush_outbox()
 end

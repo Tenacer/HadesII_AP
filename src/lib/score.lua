@@ -229,10 +229,12 @@ function on_room_cleared(currentRoom, currentEncounter)
 	local max_checks = settings.score_rewards_amount or 150
 
 	state.score = state.score + points
+	ap_notify_score(state.score, points)
 	local new_checks = math.min(math.floor(state.score / threshold), max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
+		ap_notify_milestone(state.checks_sent, max_checks)
 	end
 
 	print("[HadesII_AP] +" .. points .. " pts → " .. state.score .. " total")
