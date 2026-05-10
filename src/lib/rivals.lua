@@ -15,14 +15,19 @@ local function ap_reverse_active()
     return true
 end
 
--- Direct replacement (no modutil wrap) per the App.Reset GC-crash rule.
+-- Override IsBossDifficultyShrineUpgradeActive via modutil.mod.Path.Set so the
+-- write lands in _G (where the game's scripts resolve the global). A bare
+-- `function IsBossDifficultyShrineUpgradeActive(...)` declaration here writes
+-- to our LuaENVY-private env and the game never sees it — see
+-- feedback_modutil_wrap_crash.md.
+--
 -- The original returns false when shrineRank < EnteredBiomes; we flip the
 -- comparison so rank N covers biomes (5-N)..4 instead of 1..N.
 if not _ap_orig_IsBossDifficultyShrineUpgradeActive then
     _ap_orig_IsBossDifficultyShrineUpgradeActive = IsBossDifficultyShrineUpgradeActive
 end
 
-function IsBossDifficultyShrineUpgradeActive(source, args)
+local function ap_is_boss_difficulty_shrine_upgrade_active(source, args)
     if not ap_reverse_active() then
         return _ap_orig_IsBossDifficultyShrineUpgradeActive(source, args)
     end
@@ -56,6 +61,9 @@ function IsBossDifficultyShrineUpgradeActive(source, args)
 
     return true
 end
+
+modutil.mod.Path.Set("IsBossDifficultyShrineUpgradeActive", ap_is_boss_difficulty_shrine_upgrade_active)
+print("[HadesII_AP] Reverse rivals: IsBossDifficultyShrineUpgradeActive override installed")
 
 -- ── Vow incantation requirement patching ─────────────────────────────────────
 -- The cauldron incantations WorldUpgradeBossDifficultyT2/T3/T4 gate themselves
