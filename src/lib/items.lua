@@ -84,7 +84,55 @@ function give_item(item_name)
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
 		return true
 	end
-	-- Other non-filler items (weapons, aspects, etc.) — to be implemented.
+	-- Weapons: set every flag the game uses for unlock detection. Equipability in
+	-- the Training Grounds applies on the next map setup; if the player is already
+	-- there, ActivateWeaponKit makes the kit useable in the live scene.
+	local weapon = WEAPON_ITEM_TO_NAME and WEAPON_ITEM_TO_NAME[item_name]
+	if weapon then
+		GameState.WeaponsUnlocked[weapon]        = true
+		GameState.WeaponsTouched[weapon]         = true
+		GameState.WorldUpgrades[weapon]          = true
+		GameState.WorldUpgradesAdded[weapon]     = true
+		GameState.WorldUpgradesViewed[weapon]    = true
+		GameState.WorldUpgradesRevealed[weapon]  = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[weapon] = true
+			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
+			CurrentRun.WorldUpgradesAdded[weapon] = true
+		end
+		pcall(function()
+			local kit = GetWeaponKit and GetWeaponKit(weapon)
+			if kit then
+				kit.OnUsedFunctionName = "UseWeaponKit"
+				if SetWeaponKitUseText then SetWeaponKitUseText(kit) end
+				UseableOn({ Id = kit.ObjectId })
+				SetAlpha({ Id = kit.ObjectId, Fraction = 1.0 })
+			end
+		end)
+		print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
+		return true
+	end
+	-- Hidden aspects: WeaponsUnlocked drives the aspect equip screen
+	-- (WeaponUpgradeLogic.lua:71); WorldUpgradesAdded drives HasAnyAspectUnlocked
+	-- which gates the kit's aspect-select prompt.
+	local aspect = HIDDEN_ASPECT_ITEM_TO_NAME and HIDDEN_ASPECT_ITEM_TO_NAME[item_name]
+	if aspect then
+		GameState.WeaponsUnlocked[aspect]        = true
+		GameState.WorldUpgrades[aspect]          = true
+		GameState.WorldUpgradesAdded[aspect]     = true
+		GameState.WorldUpgradesViewed[aspect]    = true
+		GameState.WorldUpgradesRevealed[aspect]  = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[aspect] = true
+			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
+			CurrentRun.WorldUpgradesAdded[aspect] = true
+		end
+		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
+		return true
+	end
+	-- Unknown item — log and advance items_index so it isn't re-processed.
 	print("[HadesII_AP] Received (pending implementation): " .. tostring(item_name))
-	return true  -- advance items_index so the item isn't re-processed
+	return true
 end

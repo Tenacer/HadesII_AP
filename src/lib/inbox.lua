@@ -7,6 +7,12 @@ function ap_process_inbox()
 	local inbox = ap_read_inbox()
 	if not inbox then return end
 
+	-- The Python client may have written new scout responses to
+	-- ap_location_items_<world>.json since our last cache fill (e.g. a
+	-- LocationInfo arrived just after Connected). Drop the cache so the next
+	-- consumer (boss-reward spawn, sjson re-hook) sees fresh data.
+	ap_invalidate_location_items_cache()
+
 	-- DeathLink: Python client appends this when another player dies.
 	-- deathlink_seq is an incrementing counter so each death only triggers once
 	-- even if the flag stays in the inbox across multiple polls.
@@ -64,6 +70,7 @@ function prefix_SetupMap()
 		.. ", checks: " .. state.checks_sent
 		.. ", items: "  .. state.items_index)
 	ap_apply_shrine_levels()
+	ap_patch_vow_requirements()
 	ap_init_weapon_state()
 	ap_process_inbox()
 end

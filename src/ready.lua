@@ -62,12 +62,28 @@ modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEnc
 	return result
 end)
 
--- Suppress the vanilla boss reward spawn for rooms we're intercepting.
--- Show the AP logo banner in its place so the player sees visual feedback.
+-- Boss reward dispatcher. Branches on ap_boss_reward_action (set in lib/score.lua):
+--   ap_check  → spawn an interactable for the AP item placed at this location
+--               (resource-obstacle visual when local + recognised, AP icon
+--               otherwise). The AP check fires when the player picks it up.
+--   fallback  → past per-boss kill count; spawn Nightmare + Gemstones drops
+--   vanilla   → BossDefeats mode (or non-boss room); let vanilla reward through
 modutil.mod.Path.Wrap("SpawnRoomReward", function(base, eventSource, args)
-	if should_replace_reward(CurrentRun and CurrentRun.CurrentRoom) then
-		print("[HadesII_AP] Boss reward suppressed — location check sent instead")
-		ap_show_boss_reward_banner()
+	local currentRoom = CurrentRun and CurrentRun.CurrentRoom
+	local action = ap_boss_reward_action(currentRoom)
+	if action == "ap_check" then
+		local boss_key = ap_boss_for_room(currentRoom)
+		local ap_location = ap_boss_current_location_name(boss_key)
+		if ap_location then
+			print("[HadesII_AP] Spawning boss-reward pickup for " .. ap_location)
+			ap_spawn_ap_boss_reward(ap_location)
+		end
+		return
+	end
+	if action == "fallback" then
+		print("[HadesII_AP] Boss kills past AP-check range — spawning Nightmare + Gemstones drops")
+		ap_spawn_consumable_drop("WeaponPointsRareDrop", 30,  110)
+		ap_spawn_consumable_drop("GemPointsBigDrop",     150, 110)
 		return
 	end
 	return base(eventSource, args)

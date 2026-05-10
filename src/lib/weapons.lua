@@ -23,6 +23,47 @@ AP_STARTING_WEAPONS = {
 	[5] = "WeaponSuit",
 }
 
+-- Game internal weapon name → AP location name (for HandleWeaponShopPurchase wrap).
+WEAPON_LOCATIONS = {
+	WeaponStaffSwing = "Staff Weapon Unlock Location",
+	WeaponDagger     = "Daggers Weapon Unlock Location",
+	WeaponTorch      = "Torches Weapon Unlock Location",
+	WeaponAxe        = "Axe Weapon Unlock Location",
+	WeaponLob        = "Skull Weapon Unlock Location",
+	WeaponSuit       = "Coat Weapon Unlock Location",
+}
+
+-- AP item name → game internal weapon name (for give_item).
+WEAPON_ITEM_TO_NAME = {
+	["Staff Weapon Unlock Item"]   = "WeaponStaffSwing",
+	["Daggers Weapon Unlock Item"] = "WeaponDagger",
+	["Torches Weapon Unlock Item"] = "WeaponTorch",
+	["Axe Weapon Unlock Item"]     = "WeaponAxe",
+	["Skull Weapon Unlock Item"]   = "WeaponLob",
+	["Coat Weapon Unlock Item"]    = "WeaponSuit",
+}
+
+-- Game internal aspect name → AP location name (third aspect entry per weapon
+-- in WeaponShopData; gated by CharacterGrantsHiddenAspect01 text-line records).
+HIDDEN_ASPECT_LOCATIONS = {
+	StaffRaiseDeadAspect = "Staff Weapon Anubis Aspect Unlock Location",
+	DaggerTripleAspect   = "Daggers Weapon Morrigan Aspect Unlock Location",
+	TorchAutofireAspect  = "Torches Weapon Supay Aspect Unlock Location",
+	AxeRallyAspect       = "Axe Weapon Nergal Aspect Unlock Location",
+	LobGunAspect         = "Skull Weapon Hel Aspect Unlock Location",
+	SuitComboAspect      = "Coat Weapon Shiva Aspect Unlock Location",
+}
+
+-- AP item name → game internal aspect name (for give_item).
+HIDDEN_ASPECT_ITEM_TO_NAME = {
+	["Staff Weapon Anubis Aspect Unlock Item"]    = "StaffRaiseDeadAspect",
+	["Daggers Weapon Morrigan Aspect Unlock Item"] = "DaggerTripleAspect",
+	["Torches Weapon Supay Aspect Unlock Item"]   = "TorchAutofireAspect",
+	["Axe Weapon Nergal Aspect Unlock Item"]      = "AxeRallyAspect",
+	["Skull Weapon Hel Aspect Unlock Item"]       = "LobGunAspect",
+	["Coat Weapon Shiva Aspect Unlock Item"]      = "SuitComboAspect",
+}
+
 local settings = ap_load_settings()
 local target = settings and AP_STARTING_WEAPONS[settings.initial_weapon or 0]
 

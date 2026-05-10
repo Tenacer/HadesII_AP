@@ -52,6 +52,7 @@ function ap_flush_outbox(extra)
 		deaths            = s.deaths,
 		victory           = s.victory or false,
 		checked_locations = s.checked_locations,
+		hinted_locations  = s.hinted_locations or {},
 		status            = "playing",
 	}
 	if extra then
@@ -71,4 +72,43 @@ function ap_read_inbox()
 	local raw = f:read("*a")
 	f:close()
 	return json_decode(raw)
+end
+
+-- ── Location items (written by Python client after LocationScouts) ────────────
+-- Maps AP location name → item display string (e.g. "Progressive Sword [Player2]").
+-- Cached after first successful read; nil returned and retried if file not found yet.
+
+local _location_items_cache = nil
+
+function ap_read_location_items()
+	if _location_items_cache then return _location_items_cache end
+	local fname = "ap_location_items_" .. ap_world_id() .. ".json"
+	local f = io.open(ap_dir() .. fname, "r")
+	if not f then return nil end
+	local raw = f:read("*a")
+	f:close()
+	local data = json_decode(raw)
+	if type(data) == "table" then
+		_location_items_cache = data
+	end
+	return _location_items_cache
+end
+
+-- Force the location-items cache to refresh on next read (e.g. after the
+-- Python client writes a new scout response).
+function ap_invalidate_location_items_cache()
+	_location_items_cache = nil
+end
+
+-- Returns the structured entry (table) for a scouted location, or nil if
+-- the file isn't on disk yet or the location wasn't scouted. Each entry has
+--   item_name (str), player_slot (int), player_name (str),
+--   is_local (bool), display (str)
+-- See HadesIIClient._write_location_items for the source of truth.
+function ap_get_location_item(name)
+	local data = ap_read_location_items()
+	if type(data) ~= "table" then return nil end
+	local entry = data[name]
+	if type(entry) == "table" then return entry end
+	return nil
 end

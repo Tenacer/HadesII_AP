@@ -10,8 +10,11 @@
 --   deaths             (int)   — raw death counter forwarded to DeathLink
 --   victory            (bool)  — true once the goal condition is met
 --   checked_locations  (array) — AP location names reported to the Python client
+--   hinted_locations   (array) — AP location names the Python client should hint (create_as_hint=2)
 --   last_deathlink_seq (int)   — seq of last processed incoming DeathLink (dedup guard)
 --   vow_received       (table) — shrine_upgrade_name -> count of vow items received (reverse_Fear)
+--   chronos_kills      (int)   — Chronos kills observed (per-kill reward indexing, True Ending)
+--   typhon_kills       (int)   — Typhon  kills observed (per-kill reward indexing, True Ending)
 
 local _state = nil
 
@@ -26,8 +29,11 @@ function ap_load_state()
 		deaths             = 0,
 		victory            = false,
 		checked_locations  = {},
+		hinted_locations   = {},
 		last_deathlink_seq = -1,
 		vow_received       = {},
+		chronos_kills      = 0,
+		typhon_kills       = 0,
 	}
 	local f = io.open(state_path(), "r")
 	if not f then return _state end
@@ -38,6 +44,9 @@ function ap_load_state()
 		_state = parsed
 		if type(_state.checked_locations) ~= "table" then
 			_state.checked_locations = {}
+		end
+		if type(_state.hinted_locations) ~= "table" then
+			_state.hinted_locations = {}
 		end
 	end
 	return _state
