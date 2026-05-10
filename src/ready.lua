@@ -156,7 +156,10 @@ modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, a
 	local settings = ap_load_settings()
 	if settings and args and args.UpgradeData and args.UpgradeData.Gift then
 		local gift_id = args.UpgradeData.Gift
-		args.UpgradeData.Unlocked = (GameState.GiftPresentation[gift_id] == true)
+		local from_gift = (GameState.GiftPresentation[gift_id] == true)
+		local from_ap   = (GameState.AP_KeepsakeReceived
+			and GameState.AP_KeepsakeReceived[gift_id] == true)
+		args.UpgradeData.Unlocked = from_gift or from_ap
 	end
 	return base(screen, components, args)
 end)

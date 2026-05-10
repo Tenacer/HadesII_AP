@@ -71,17 +71,36 @@ function give_item(item_name)
 		print("[HadesII_AP] Gave Disintegration of Monstrosity (WorldUpgradeStormStop)")
 		return true
 	end
-	-- Keepsakes: unlock immediately in the equip screen so the player can equip
-	-- the keepsake as soon as it's received from AP. The ReceivedGiftPresentation
-	-- hook in reload.lua sends the AP location check when the player actually gifts
-	-- the NPC (keepsakesanity mode), firing before GiftLogic's GiftPresentation check.
+	-- Keepsakes: track the AP-received unlock in our own GameState field so the
+	-- vanilla GiftPresentation flag stays clear. That way GiveGift still calls
+	-- PlayerReceivedGiftPresentation when the player gifts the NPC, letting our
+	-- ready.lua wrap fire and send the AP location check. CreateKeepsakeIcon
+	-- (also wrapped in ready.lua) reads AP_KeepsakeReceived to mark the keepsake
+	-- as equipable on the rack.
 	local gift_id = KEEPSAKE_GIFT_IDS[item_name]
 	if gift_id then
-		GameState.GiftPresentation = GameState.GiftPresentation or {}
-		GameState.NewKeepsakeItem  = GameState.NewKeepsakeItem  or {}
-		GameState.NewKeepsakeItem[gift_id] = true
-		GameState.GiftPresentation[gift_id] = true
+		GameState.AP_KeepsakeReceived = GameState.AP_KeepsakeReceived or {}
+		GameState.AP_KeepsakeReceived[gift_id] = true
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
+		return true
+	end
+	-- Tools: unlock the tool so HasAccessToTool returns true. WorldUpgradesAdded
+	-- marks the shop slot as already-purchased so the player isn't charged again.
+	-- The location check fires from ap_check_tool_unlocks (called in prefix_SetupMap).
+	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
+	if tool then
+		GameState.WeaponsUnlocked[tool]         = true
+		GameState.WorldUpgrades[tool]           = true
+		GameState.WorldUpgradesAdded[tool]      = true
+		GameState.WorldUpgradesViewed[tool]     = true
+		GameState.WorldUpgradesRevealed[tool]   = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[tool] = true
+			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
+			CurrentRun.WorldUpgradesAdded[tool] = true
+		end
+		print("[HadesII_AP] Gave tool: " .. item_name .. " (" .. tool .. ")")
 		return true
 	end
 	-- Weapons: set every flag the game uses for unlock detection. Equipability in

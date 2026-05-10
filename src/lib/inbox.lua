@@ -73,4 +73,5 @@ function prefix_SetupMap()
 	ap_patch_vow_requirements()
 	ap_init_weapon_state()
 	ap_process_inbox()
+	ap_check_tool_unlocks()
 end
