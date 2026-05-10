@@ -9,6 +9,16 @@ function give_item(item_name)
 		return give_item_vow(item_name)
 	end
 
+	-- Traps: queue mid-run effects (drained from prefix_SetupMap).
+	if TRAP_ITEMS and TRAP_ITEMS[item_name] then
+		return give_item_trap(item_name)
+	end
+
+	-- Helpers: persistent stat boosts (MaxHealth, InitialMoney, BoonBoost).
+	if HELPER_ITEMS and HELPER_ITEMS[item_name] then
+		return give_item_helper(item_name)
+	end
+
 	local filler = FILLER_ITEMS[item_name]
 	if filler then
 		local settings = ap_load_settings()

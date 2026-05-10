@@ -14,6 +14,7 @@ import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/rivals.lua'
 import 'lib/tools.lua'
+import 'lib/traphelper.lua'
 import 'lib/items.lua'
 import 'lib/score.lua'
 import 'lib/death.lua'
@@ -273,6 +274,44 @@ local function ap_handle_weapon_shop_purchase(screen, button)
 end
 modutil.mod.Path.Set("HandleWeaponShopPurchase", ap_handle_weapon_shop_purchase)
 print("[HadesII_AP] HandleWeaponShopPurchase override installed")
+
+-- ── Trap & Helper hooks ─────────────────────────────────────────────────────
+
+-- StartNewRun: apply persistent run-start helpers after vanilla finishes.
+--   • Initial Money helper: extra Money on top of CalculateStartingMoney
+--   • Max Health helper: re-sync the cumulative bonus onto the fresh hero
+-- Path.Set + _ap_orig_* pattern (Path.Wrap crashes on App.Reset; bare
+-- `function StartNewRun(...)` would silently no-op via LuaENVY).
+if not _ap_orig_StartNewRun then
+	_ap_orig_StartNewRun = StartNewRun
+end
+local function ap_start_new_run(prevRun, args)
+	local result = _ap_orig_StartNewRun(prevRun, args)
+	pcall(ap_apply_max_health_helper)
+	pcall(ap_apply_initial_money_helper)
+	return result
+end
+modutil.mod.Path.Set("StartNewRun", ap_start_new_run)
+print("[HadesII_AP] StartNewRun override installed")
+
+-- GetRarityChances: add an additive percentage to every rarity bucket from
+-- the accumulated Boon Boost Helpers. Hot in loot rolls, but Path.Set is
+-- just a regular function call (no wrap-machinery overhead).
+if not _ap_orig_GetRarityChances then
+	_ap_orig_GetRarityChances = GetRarityChances
+end
+local function ap_get_rarity_chances(loot)
+	local rarityChances = _ap_orig_GetRarityChances(loot)
+	local boost = ap_boon_boost_pct and ap_boon_boost_pct() or 0
+	if boost > 0 and rarityChances then
+		for k, v in pairs(rarityChances) do
+			rarityChances[k] = v + boost
+		end
+	end
+	return rarityChances
+end
+modutil.mod.Path.Set("GetRarityChances", ap_get_rarity_chances)
+print("[HadesII_AP] GetRarityChances override installed")
 
 -- ── SJSON hook handlers ───────────────────────────────────────────────────────
 

@@ -76,4 +76,5 @@ function prefix_SetupMap()
 	ap_process_inbox()
 	ap_check_tool_unlocks()
 	ap_check_quest_completions()
+	ap_process_trap_queue()
 end
