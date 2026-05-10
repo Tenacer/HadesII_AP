@@ -10,10 +10,10 @@
 PROPHECY_LOCATIONS = {
 	["QuestDarkSorceries"]                       = "Gifts of the Moon Check",
 	["QuestPurchasePinnedItems"]                 = "Note to Self Check",
-	["QuestRescueFates"]                         = "Melinoë, Help Us Check",
-	["QuestRescueFatesPostTrueEnding"]           = "Melinoë, Remember Us Check",
-	["QuestRescueFatesProgress"]                 = "Melinoë, Seek Us Check",
-	["QuestRescueFatesTrue"]                     = "Melinoë, Find Us Check",
+	-- QuestRescueFates / *PostTrueEnding / *Progress / *True intentionally
+	-- excluded: it's a single QuestData entry whose Name field rotates through
+	-- 4 stages via SetupEvents, and the final Find Us stage requires the
+	-- post-True-Ending FatesEpilogue01 text-line — i.e. post-goal, soft-lock-prone.
 	["QuestZeusUpgrades"]                        = "Master of the Heavens Check",
 	["QuestPoseidonUpgrades"]                    = "Master of the Sea Check",
 	["QuestApolloUpgrades"]                      = "Master of Light Check",
@@ -98,3 +98,11 @@ PROPHECY_LOCATIONS = {
 	["QuestMemLevel10"]                          = "Mindful Craft Check",
 	["QuestEliteAttributeKills"]                 = "Bared Fangs Check",
 }
+
+-- Reverse: AP item name → quest id. Item names follow the pattern
+-- "<location minus ' Check'> Reward" — see worlds/hades_ii/data/items.csv.
+PROPHECY_QUEST_FOR_ITEM = {}
+for quest_id, location in pairs(PROPHECY_LOCATIONS) do
+	local base = location:gsub(" Check$", "")
+	PROPHECY_QUEST_FOR_ITEM[base .. " Reward"] = quest_id
+end

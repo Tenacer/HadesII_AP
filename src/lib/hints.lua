@@ -59,3 +59,20 @@ function ap_hint_questlog_visible()
 		end
 	end
 end
+
+-- ── Quest completion: poll for cashed-out prophecies ─────────────────────────
+-- Backstop for the CashOutQuest override (reload.lua). The override fires the
+-- AP check the moment the player clicks cashout; this poll catches anything
+-- that slipped through (mod reload mid-cashout, save-state edge cases) on the
+-- next prefix_SetupMap. ap_check_location is idempotent.
+
+function ap_check_quest_completions()
+	local settings = ap_load_settings()
+	if not (settings and settings.fatesanity == 1) then return end
+	if not (GameState and GameState.QuestStatus) then return end
+	for quest_id, location in pairs(PROPHECY_LOCATIONS) do
+		if GameState.QuestStatus[quest_id] == "CashedOut" then
+			ap_check_location(location)
+		end
+	end
+end

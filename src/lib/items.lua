@@ -151,6 +151,24 @@ function give_item(item_name)
 		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
 		return true
 	end
+	-- Prophecies: grant the same resource the vanilla quest cashout would award.
+	-- The CashOutQuest override in reload.lua suppresses the vanilla AddResource,
+	-- so this is the sole grant path for prophecy rewards.
+	local quest_id = PROPHECY_QUEST_FOR_ITEM and PROPHECY_QUEST_FOR_ITEM[item_name]
+	if quest_id then
+		local questData = QuestData and QuestData[quest_id]
+		local resource = questData and questData.RewardResourceName
+		local amount = questData and questData.RewardResourceAmount
+		if resource and amount then
+			AddResource(resource, amount, _PLUGIN.guid, { SkipVoiceLines = true })
+			print("[HadesII_AP] Gave prophecy reward: " .. item_name
+				.. " (" .. amount .. "x " .. resource .. ")")
+		else
+			print("[HadesII_AP] Prophecy reward missing data: " .. item_name
+				.. " (quest=" .. tostring(quest_id) .. ")")
+		end
+		return true
+	end
 	-- Unknown item — log and advance items_index so it isn't re-processed.
 	print("[HadesII_AP] Received (pending implementation): " .. tostring(item_name))
 	return true

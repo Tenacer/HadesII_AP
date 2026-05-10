@@ -26,9 +26,9 @@ end)
 -- ── Debug keybind ─────────────────────────────────────────────────────────────
 
 -- Press the Gift button to receive a test Ash pack (verifies IPC and AddResource).
-game.OnControlPressed({'Gift', function()
-	give_item("Ash")
-end})
+-- game.OnControlPressed({'Gift', function()
+-- 	give_item("Ash")
+-- end})
 
 -- ── Room / map hooks ─────────────────────────────────────────────────────────
 

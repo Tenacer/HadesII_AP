@@ -165,6 +165,49 @@ end
 modutil.mod.Path.Set("OpenQuestLogScreen", ap_open_quest_log_screen)
 print("[HadesII_AP] OpenQuestLogScreen override installed")
 
+-- ── Fatesanity: intercept prophecy cashout ───────────────────────────────────
+
+-- For prophecies that are AP locations (fatesanity on), suppress the vanilla
+-- AddResource — the resource is granted instead by give_item when the AP item
+-- comes back from the server. The function body is inline-replicated from
+-- QuestLogLogic.lua:211 so we can drop just the one AddResource line; see
+-- the cauldron-incantation pattern (HandleGhostAdminPurchase) for the same idea.
+if not _ap_orig_CashOutQuest then
+    _ap_orig_CashOutQuest = CashOutQuest
+end
+local function ap_cash_out_quest(screen, button)
+    local settings = ap_load_settings()
+    local questData = button and button.Data
+    local quest_name = questData and questData.Name
+    local ap_location = quest_name and PROPHECY_LOCATIONS[quest_name]
+    if not (settings and settings.fatesanity == 1 and ap_location) then
+        return _ap_orig_CashOutQuest(screen, button)
+    end
+    if questData.CompleteGameStateRequirements ~= nil
+            and not IsGameStateEligible(questData, questData.CompleteGameStateRequirements) then
+        return
+    end
+    button.OnPressedFunctionName = nil
+    if GameState.QuestStatus[quest_name] ~= "CashedOut" then
+        ap_check_location(ap_location)
+        GameState.QuestStatus[quest_name] = "CashedOut"
+        QuestCashedOutPresentation(screen, button)
+    end
+    StopFlashing({ Id = button.Id })
+    local justCashedOutFormat = screen.JustCashedOutFormat
+    justCashedOutFormat.Id = button.Id
+    ModifyTextBox(justCashedOutFormat)
+    SetAlpha({ Id = screen.Components.RewardText.Id, Fraction = 0.0, Duration = 0.2 })
+    local animationName = screen.Components.RewardClaimedIcon.AnimationName
+    if questData.InterstitialData ~= nil then
+        animationName = screen.Components.RewardClaimedIcon.SpecialAnimationName
+    end
+    SetAnimation({ DestinationId = screen.Components.RewardClaimedIcon.Id, Name = animationName })
+    SetAlpha({ Id = screen.Components.RewardClaimedIcon.Id, Fraction = 1.0, Duration = 0.2 })
+end
+modutil.mod.Path.Set("CashOutQuest", ap_cash_out_quest)
+print("[HadesII_AP] CashOutQuest override installed")
+
 -- ── Weapon / hidden aspect sanity ────────────────────────────────────────────
 
 -- Suppress the vanilla weapon/aspect unlock when the corresponding sanity option
