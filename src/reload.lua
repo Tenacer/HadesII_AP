@@ -95,11 +95,12 @@ end
 -- check) to send AP location checks in keepsakesanity mode. This fires regardless
 -- of whether give_item already set GiftPresentation, which means we always catch
 -- the gifting event and can send the check even if the keepsake was AP-received first.
--- Uses direct Lua replacement (no modutil wrap) to avoid the GC crash on game reset.
+-- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
+-- `function ReceivedGiftPresentation(...)` here would silently no-op (LuaENVY-private env).
 if not _ap_orig_ReceivedGiftPresentation then
     _ap_orig_ReceivedGiftPresentation = ReceivedGiftPresentation
 end
-function ReceivedGiftPresentation(npc, giftAnimation)
+local function ap_received_gift_presentation(npc, giftAnimation)
     _ap_orig_ReceivedGiftPresentation(npc, giftAnimation)
     if giftAnimation ~= "GiftNPC" then return end
     local settings = ap_load_settings()
@@ -128,6 +129,8 @@ function ReceivedGiftPresentation(npc, giftAnimation)
         end
     end
 end
+modutil.mod.Path.Set("ReceivedGiftPresentation", ap_received_gift_presentation)
+print("[HadesII_AP] ReceivedGiftPresentation override installed")
 
 -- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
 
@@ -135,26 +138,32 @@ end
 -- open + every tab switch). ap_hint_cauldron_visible reads screen.AvailableItems
 -- which the original GhostAdminDisplayCategory has just populated, then dedupes
 -- via ap_hint_location so each location is hinted at most once.
--- Direct replacement (not modutil wrap) — new wraps trigger the App.Reset GC crash.
+-- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
+-- `function GhostAdminDisplayCategory(...)` here would silently no-op (LuaENVY-private env).
 if not _ap_orig_GhostAdminDisplayCategory then
     _ap_orig_GhostAdminDisplayCategory = GhostAdminDisplayCategory
 end
-function GhostAdminDisplayCategory(screen, button)
+local function ap_ghost_admin_display_category(screen, button)
     _ap_orig_GhostAdminDisplayCategory(screen, button)
     ap_hint_cauldron_visible(screen)
 end
+modutil.mod.Path.Set("GhostAdminDisplayCategory", ap_ghost_admin_display_category)
+print("[HadesII_AP] GhostAdminDisplayCategory override installed")
 
 -- Hint each visible (non-cashed-out) prophecy when the Fated List opens.
 -- Replicates the game's filter independently rather than reading screen state,
 -- which is cleaner because OpenQuestLogScreen has waits before it builds buttons.
+-- Override installed via modutil.mod.Path.Set (see note above).
 if not _ap_orig_OpenQuestLogScreen then
     _ap_orig_OpenQuestLogScreen = OpenQuestLogScreen
 end
-function OpenQuestLogScreen(args)
+local function ap_open_quest_log_screen(args)
     local result = _ap_orig_OpenQuestLogScreen(args)
     ap_hint_questlog_visible()
     return result
 end
+modutil.mod.Path.Set("OpenQuestLogScreen", ap_open_quest_log_screen)
+print("[HadesII_AP] OpenQuestLogScreen override installed")
 
 -- ── Weapon / hidden aspect sanity ────────────────────────────────────────────
 
@@ -162,11 +171,12 @@ end
 -- is on. Player still pays cost; AddWorldUpgrade and the equip thread are skipped.
 -- give_item handles the real unlock when the AP item arrives. WorldUpgradesAdded
 -- is set so the slot shows as purchased and can't be re-bought.
--- Direct replacement (not modutil wrap) — new wraps trigger the App.Reset GC crash.
+-- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
+-- `function HandleWeaponShopPurchase(...)` here would silently no-op (LuaENVY-private env).
 if not _ap_orig_HandleWeaponShopPurchase then
     _ap_orig_HandleWeaponShopPurchase = HandleWeaponShopPurchase
 end
-function HandleWeaponShopPurchase(screen, button)
+local function ap_handle_weapon_shop_purchase(screen, button)
     local settings = ap_load_settings()
     local itemData = button and button.Data
     if settings and itemData then
@@ -217,6 +227,8 @@ function HandleWeaponShopPurchase(screen, button)
     end
     return _ap_orig_HandleWeaponShopPurchase(screen, button)
 end
+modutil.mod.Path.Set("HandleWeaponShopPurchase", ap_handle_weapon_shop_purchase)
+print("[HadesII_AP] HandleWeaponShopPurchase override installed")
 
 -- ── SJSON hook handlers ───────────────────────────────────────────────────────
 
