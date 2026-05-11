@@ -26,14 +26,46 @@ import 'lib/weapons.lua'
 -- Animation name for our custom AP logo, packed in Tenacer_AP-HadesII_AP.pkg.
 AP_ICON_ANIM = _PLUGIN.guid .. "\\ap_icon"
 
--- Replace the Icon field on every tracked incantation in WorldUpgradeData so
--- the cauldron screen shows the Archipelago logo instead of per-spell artwork.
+-- Replace the Icon field on every AP-controlled incantation so the cauldron
+-- screen shows the Archipelago logo instead of per-spell artwork. The set of
+-- AP-controlled keys depends on settings:
+--  • cauldronsanity → the 86 non-surface, non-goal incantations
+--  • lock_surface_incantations → the two surface-unlock incantations
+--  • true_ending → the two goal incantations
 function ap_patch_incantation_icons()
 	if WorldUpgradeData == nil then return end
+	local settings = ap_load_settings() or {}
+	local do_cauldron = settings.cauldronsanity == 1
 	for key, _ in pairs(INCANTATION_LOCATIONS) do
 		local data = WorldUpgradeData[key]
 		if data then
-			data.Icon = AP_ICON_ANIM
+			local is_ap = is_ap_keyed_incantation(key, settings)
+				or (do_cauldron and not is_surface_lock_incantation(key)
+					and not is_goal_incantation(key))
+			if is_ap then
+				data.Icon = AP_ICON_ANIM
+			end
+		end
+	end
+end
+
+-- Append a `PathTrue` requirement to each AP-keyed incantation's
+-- GameStateRequirements so the cauldron entry stays hidden until the player
+-- receives the AP item (which sets the corresponding TextLinesRecord flag).
+-- Idempotent: a sentinel `_ap_cauldron_gate_patched` on each entry prevents
+-- double-application across hot-reload / SetupMap calls.
+function ap_patch_incantation_gates()
+	if WorldUpgradeData == nil then return end
+	local settings = ap_load_settings() or {}
+	local keyed = ap_keyed_incantations(settings)
+	for key in pairs(keyed) do
+		local data = WorldUpgradeData[key]
+		if data and not data._ap_cauldron_gate_patched then
+			data.GameStateRequirements = data.GameStateRequirements or {}
+			table.insert(data.GameStateRequirements, {
+				PathTrue = { "GameState", "TextLinesRecord", ap_unlock_flag_for(key) },
+			})
+			data._ap_cauldron_gate_patched = true
 		end
 	end
 end
@@ -335,14 +367,30 @@ function sjson_HelpText(data)
 	local settings = ap_load_settings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	local do_fate = settings.fatesanity == 1
-	if not (do_cauldron or do_fate) then return end
+	local keyed = ap_keyed_incantations(settings)
+	local has_keyed = next(keyed) ~= nil
+	if not (do_cauldron or do_fate or has_keyed) then return end
 
 	local location_items = ap_read_location_items() or {}
+
+	-- Resolve an incantation key to the AP location name it represents, only
+	-- when that key is AP-controlled in the current settings. The 86
+	-- cauldronsanity keys are owned by cauldronsanity; the surface 2 and goal 2
+	-- are owned by their respective toggles regardless of cauldronsanity.
+	local function incantation_location_for(id)
+		if keyed[id] then return INCANTATION_LOCATIONS[id] end
+		if do_cauldron
+			and not is_surface_lock_incantation(id)
+			and not is_goal_incantation(id) then
+			return INCANTATION_LOCATIONS[id]
+		end
+		return nil
+	end
 
 	for _, entry in ipairs(data.Texts) do
 		local id = entry.Id
 		if id then
-			local ap_location = (do_cauldron and INCANTATION_LOCATIONS[id])
+			local ap_location = incantation_location_for(id)
 				or (do_fate and PROPHECY_LOCATIONS[id])
 			if ap_location then
 				local item_entry = location_items[ap_location]
@@ -357,7 +405,7 @@ function sjson_HelpText(data)
 				entry.Description = "Archipelago location check. Complete this in-game to send a check to the Archipelago server."
 			else
 				local base_id = id:match("^(.-)_Flavor$")
-				if base_id and do_cauldron and INCANTATION_LOCATIONS[base_id] then
+				if base_id and incantation_location_for(base_id) then
 					entry.Description = "What you receive in exchange is determined by the Archipelago multiworld randomizer."
 				end
 			end

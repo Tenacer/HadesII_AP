@@ -10,8 +10,10 @@
 -- ── Initial startup calls ────────────────────────────────────────────────────
 
 -- These need reload.lua (imported in on_reload before on_ready_late fires).
--- Patch incantation icons for the hub screen before the first SetupMap wrap fires.
+-- Patch incantation icons + cauldron-visibility gates for the hub screen
+-- before the first SetupMap wrap fires.
 ap_patch_incantation_icons()
+ap_patch_incantation_gates()
 -- Flush the outbox immediately so the Python client sees the game is running.
 ap_flush_outbox()
 

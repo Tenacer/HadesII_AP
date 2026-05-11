@@ -102,3 +102,64 @@ INCANTATION_KEY_FOR_NAME = {}
 for key, name in pairs(INCANTATION_LOCATIONS) do
 	INCANTATION_KEY_FOR_NAME[name] = key
 end
+
+-- ── AP-keyed incantations ────────────────────────────────────────────────────
+-- AP-keyed incantations are the small set whose cauldron *visibility* is gated
+-- on receiving the corresponding AP item: the entry doesn't appear in the
+-- GhostAdmin screen until `GameState.TextLinesRecord[ap_unlock_flag_for(key)]`
+-- is set, then brewing applies the vanilla effect AND fires the AP location
+-- check. This is a different model from the existing cauldronsanity flow,
+-- which intercepts brewing and suppresses the vanilla effect.
+--
+-- Two groups are AP-keyed:
+--  • Surface-unlock incantations (WorldUpgradeAltRunDoor +
+--    WorldUpgradeSurfacePenaltyCure) — gated by `lock_surface_incantations`.
+--    Independent of `cauldronsanity`.
+--  • Goal incantations (WorldUpgradeTimeStop + WorldUpgradeStormStop) — gated
+--    by `true_ending`. Independent of `cauldronsanity`.
+SURFACE_LOCK_INCANTATION_KEYS = {
+	WorldUpgradeAltRunDoor        = true,
+	WorldUpgradeSurfacePenaltyCure = true,
+}
+
+GOAL_INCANTATION_KEYS = {
+	WorldUpgradeTimeStop  = true,
+	WorldUpgradeStormStop = true,
+}
+
+function is_surface_lock_incantation(wu_key)
+	return SURFACE_LOCK_INCANTATION_KEYS[wu_key] == true
+end
+
+function is_goal_incantation(wu_key)
+	return GOAL_INCANTATION_KEYS[wu_key] == true
+end
+
+function ap_unlock_flag_for(wu_key)
+	return "APUnlock_" .. wu_key
+end
+
+-- Build the runtime set of AP-keyed WorldUpgrade keys based on the current
+-- settings dict. Caller passes an `ap_load_settings()` result (or nil for an
+-- empty result). Returns a set keyed by WorldUpgrade name.
+function ap_keyed_incantations(settings)
+	local out = {}
+	if not settings then return out end
+	if settings.lock_surface_incantations == 1 then
+		for key in pairs(SURFACE_LOCK_INCANTATION_KEYS) do out[key] = true end
+	end
+	if settings.true_ending == 1 then
+		for key in pairs(GOAL_INCANTATION_KEYS) do out[key] = true end
+	end
+	return out
+end
+
+function is_ap_keyed_incantation(wu_key, settings)
+	if is_surface_lock_incantation(wu_key) then
+		return settings and settings.lock_surface_incantations == 1 or false
+	end
+	if is_goal_incantation(wu_key) then
+		return settings and settings.true_ending == 1 or false
+	end
+	return false
+end

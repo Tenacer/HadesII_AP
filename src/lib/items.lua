@@ -27,17 +27,31 @@ function give_item(item_name)
 		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
 		return true
 	end
-	-- Incantation: unlock the world upgrade and fire its effect.
+	-- Incantation: AP-keyed items (surface lock, goal incantations) only flip
+	-- the unlock TextLinesRecord flag — the cauldron entry then appears for the
+	-- player to brew normally, and brewing applies the vanilla effect + fires
+	-- the AP location check via the HandleGhostAdminPurchase wrap.
+	-- Non-AP-keyed cauldronsanity incantations (the other 86) get the
+	-- WorldUpgrade flag set directly here because the cauldron wrap suppresses
+	-- the vanilla effect — this is the only path that grants the effect.
 	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
 	if wu_key then
-		-- Set flags directly rather than via UnlockWorldUpgrade, because
-		-- UnlockWorldUpgrade skips WorldUpgrades[name]=true if WorldUpgradesAdded
-		-- is already set (which it is after a cauldronsanity AP purchase).
+		local settings = ap_load_settings()
+		if is_ap_keyed_incantation(wu_key, settings) then
+			local flag = ap_unlock_flag_for(wu_key)
+			GameState.TextLinesRecord = GameState.TextLinesRecord or {}
+			GameState.TextLinesRecord[flag] = true
+			if CurrentRun and CurrentRun.TextLinesRecord then
+				CurrentRun.TextLinesRecord[flag] = true
+			end
+			print("[HadesII_AP] Incantation cauldron-unlocked: " .. item_name)
+			return true
+		end
+		-- Cauldronsanity 86: apply effect directly (vanilla brew is suppressed).
 		GameState.WorldUpgrades[wu_key]         = true
 		GameState.WorldUpgradesAdded[wu_key]    = true
 		GameState.WorldUpgradesViewed[wu_key]   = true
 		GameState.WorldUpgradesRevealed[wu_key] = true
-		-- Fire the upgrade's effect (opens shops, unlocks systems, etc.).
 		local itemData = WorldUpgradeData and WorldUpgradeData[wu_key]
 		if itemData and itemData.OnActivateFinishedFunctionName then
 			pcall(CallFunctionName, itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
@@ -59,26 +73,6 @@ function give_item(item_name)
 	if item_name == "Gigaros" then
 		AddResource("HadesSpearPoints", 1, _PLUGIN.guid)
 		print("[HadesII_AP] Gave Gigaros (HadesSpearPoints)")
-		return true
-	end
-	-- Goal incantations: unlock the WorldUpgrade when received from AP.
-	if item_name == "Dissolution of Time" then
-		GameState.WorldUpgradesViewed["WorldUpgradeTimeStop"]   = true
-		GameState.WorldUpgradesRevealed["WorldUpgradeTimeStop"] = true
-		UnlockWorldUpgrade("WorldUpgradeTimeStop")
-		local itemData = WorldUpgradeData and WorldUpgradeData["WorldUpgradeTimeStop"]
-		if itemData and itemData.OnActivateFinishedFunctionName then
-			-- UnblockHubExitForNarrative touches MapState — safe only in the hub.
-			pcall(CallFunctionName, itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
-		end
-		print("[HadesII_AP] Gave Dissolution of Time (WorldUpgradeTimeStop)")
-		return true
-	end
-	if item_name == "Disintegration of Monstrosity" then
-		GameState.WorldUpgradesViewed["WorldUpgradeStormStop"]   = true
-		GameState.WorldUpgradesRevealed["WorldUpgradeStormStop"] = true
-		UnlockWorldUpgrade("WorldUpgradeStormStop")
-		print("[HadesII_AP] Gave Disintegration of Monstrosity (WorldUpgradeStormStop)")
 		return true
 	end
 	-- Keepsakes: track the AP-received unlock in our own GameState field so the

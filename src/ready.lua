@@ -41,6 +41,7 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
 	LoadPackages({ Name = ap_icon_pkg })
 	ap_patch_incantation_icons()
+	ap_patch_incantation_gates()
 	prefix_SetupMap()
 	if not _polling_started then
 		_polling_started = true
@@ -91,34 +92,53 @@ end)
 
 -- ── Cauldron interception ────────────────────────────────────────────────────
 
--- Don't call base() for AP incantations. Calling base() would invoke
--- CloseGhostAdminScreen with the purchase button, which causes
--- GhostAdminScreenClosedPresentation to take the incantation-animation branch
--- (sets up CauldronBackgroundIllustration, no camera pan). The camera pan to
--- hero only happens via the close-button branch of that function.
--- Instead we replicate only what we need and pass screen.Components.CloseButton
--- to CloseGhostAdminScreen so the camera correctly returns to Melinoe.
+-- Three-way dispatch on the brewed incantation:
+--  1. AP-keyed (surface lock or goal incantation under their respective
+--     toggles): fire the AP location check, then let base() run so the vanilla
+--     WorldUpgrade effect applies normally. The AP item already unlocked the
+--     cauldron entry (see ap_patch_incantation_gates) — brewing is the natural
+--     consummation of that, both granting the effect locally and sending the
+--     AP check.
+--  2. Cauldronsanity (the 86 non-special incantations): intercept and suppress
+--     the vanilla effect. The AP item delivers the effect when received.
+--     We don't call base() because CloseGhostAdminScreen with the purchase
+--     button takes the incantation-animation branch (no camera pan); instead
+--     we replicate only what we need and pass screen.Components.CloseButton so
+--     the camera correctly returns to Melinoë.
+--  3. Otherwise: vanilla, no AP involvement.
 modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local settings = ap_load_settings()
-	if settings and settings.cauldronsanity == 1 then
-		local itemData = button and button.Data
-		if itemData then
-			local ap_location = INCANTATION_LOCATIONS[itemData.Name]
-			if ap_location then
-				GhostAdminItemPurchasedPresentation(button, itemData)
-				if GameState then
-					GameState.WorldUpgradesAdded[itemData.Name] = true
-				end
-				if CurrentRun then
-					CurrentRun.WorldUpgradesAdded[itemData.Name] = true
-				end
-				CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
-				ap_check_location(ap_location)
-				ap_show_boss_reward_banner()
-				return
-			end
-		end
+	local itemData = button and button.Data
+	if not (settings and itemData) then return base(screen, button) end
+
+	local wu_key = itemData.Name
+	local ap_location = INCANTATION_LOCATIONS[wu_key]
+	if not ap_location then return base(screen, button) end
+
+	-- AP-keyed: fire check, then vanilla brew applies the effect.
+	if is_ap_keyed_incantation(wu_key, settings) then
+		ap_check_location(ap_location)
+		ap_show_boss_reward_banner()
+		return base(screen, button)
 	end
+
+	-- Cauldronsanity: intercept the 86 non-special incantations.
+	if settings.cauldronsanity == 1
+		and not is_surface_lock_incantation(wu_key)
+		and not is_goal_incantation(wu_key) then
+		GhostAdminItemPurchasedPresentation(button, itemData)
+		if GameState then
+			GameState.WorldUpgradesAdded[wu_key] = true
+		end
+		if CurrentRun then
+			CurrentRun.WorldUpgradesAdded[wu_key] = true
+		end
+		CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
+		ap_check_location(ap_location)
+		ap_show_boss_reward_banner()
+		return
+	end
+
 	return base(screen, button)
 end)
 

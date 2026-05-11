@@ -28,12 +28,29 @@ end
 
 function ap_hint_cauldron_visible(screen)
 	local settings = ap_load_settings()
-	if not (settings and settings.cauldronsanity == 1) then return end
+	if not settings then return end
+	local do_cauldron = settings.cauldronsanity == 1
+	local keyed = ap_keyed_incantations(settings)
+	if not (do_cauldron or next(keyed)) then return end
 	if not (screen and screen.AvailableItems) then return end
 	for _, itemData in ipairs(screen.AvailableItems) do
-		local ap_location = itemData and itemData.Name and INCANTATION_LOCATIONS[itemData.Name]
+		local name = itemData and itemData.Name
+		local ap_location = name and INCANTATION_LOCATIONS[name]
 		if ap_location then
-			ap_hint_location(ap_location)
+			-- Hint AP-keyed incantations always (when their toggle is on); hint
+			-- the other 86 only under cauldronsanity. Skip surface/goal keys
+			-- entirely when their toggle is off — they're not AP locations.
+			local should_hint
+			if keyed[name] then
+				should_hint = true
+			elseif do_cauldron
+				and not is_surface_lock_incantation(name)
+				and not is_goal_incantation(name) then
+				should_hint = true
+			end
+			if should_hint then
+				ap_hint_location(ap_location)
+			end
 		end
 	end
 end
