@@ -27,7 +27,7 @@ end)
 
 -- Press the Gift button to receive a test Ash pack (verifies IPC and AddResource).
 -- game.OnControlPressed({'Gift', function()
--- 	give_item("Ash")
+-- 	H2AP_GiveItem("Ash")
 -- end})
 
 -- ── Room / map hooks ─────────────────────────────────────────────────────────
@@ -40,16 +40,16 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	-- Reload the package each room (game may evict it) and re-patch icons
 	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
 	LoadPackages({ Name = ap_icon_pkg })
-	ap_patch_incantation_icons()
-	ap_patch_incantation_gates()
-	prefix_SetupMap()
+	H2AP_PatchIncantationIcons()
+	H2AP_PatchIncantationGates()
+	H2AP_SetupMap()
 	if not _polling_started then
 		_polling_started = true
 		-- Persist=true survives LoadMap/KillNonPersistentThreads so we only need to start once.
 		thread(function()
 			while true do
 				wait(0.5, "AP_Inbox_Poll", true)
-				ap_process_inbox()
+				H2AP_ProcessInbox()
 			end
 		end)
 	end
@@ -59,11 +59,11 @@ end)
 -- Fires when all enemies in a room are dead: score a room clear or a boss kill.
 modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEncounter)
 	local result = base(currentRoom, currentEncounter)
-	on_room_cleared(currentRoom, currentEncounter)
+	H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	return result
 end)
 
--- Boss reward dispatcher. Branches on ap_boss_reward_action (set in lib/score.lua):
+-- Boss reward dispatcher. Branches on H2AP_BossRewardAction (set in lib/score.lua):
 --   ap_check  → spawn an interactable for the AP item placed at this location
 --               (resource-obstacle visual when local + recognised, AP icon
 --               otherwise). The AP check fires when the player picks it up.
@@ -71,20 +71,20 @@ end)
 --   vanilla   → BossDefeats mode (or non-boss room); let vanilla reward through
 modutil.mod.Path.Wrap("SpawnRoomReward", function(base, eventSource, args)
 	local currentRoom = CurrentRun and CurrentRun.CurrentRoom
-	local action = ap_boss_reward_action(currentRoom)
+	local action = H2AP_BossRewardAction(currentRoom)
 	if action == "ap_check" then
-		local boss_key = ap_boss_for_room(currentRoom)
-		local ap_location = ap_boss_current_location_name(boss_key)
+		local boss_key = H2AP_BossForRoom(currentRoom)
+		local ap_location = H2AP_BossCurrentLocationName(boss_key)
 		if ap_location then
 			print("[HadesII_AP] Spawning boss-reward pickup for " .. ap_location)
-			ap_spawn_ap_boss_reward(ap_location)
+			H2AP_SpawnApBossReward(ap_location)
 		end
 		return
 	end
 	if action == "fallback" then
 		print("[HadesII_AP] Boss kills past AP-check range — spawning Nightmare + Gemstones drops")
-		ap_spawn_consumable_drop("WeaponPointsRareDrop", 30,  110)
-		ap_spawn_consumable_drop("GemPointsBigDrop",     150, 110)
+		H2AP_SpawnConsumableDrop("WeaponPointsRareDrop", 30,  110)
+		H2AP_SpawnConsumableDrop("GemPointsBigDrop",     150, 110)
 		return
 	end
 	return base(eventSource, args)
@@ -96,7 +96,7 @@ end)
 --  1. AP-keyed (surface lock or goal incantation under their respective
 --     toggles): fire the AP location check, then let base() run so the vanilla
 --     WorldUpgrade effect applies normally. The AP item already unlocked the
---     cauldron entry (see ap_patch_incantation_gates) — brewing is the natural
+--     cauldron entry (see H2AP_PatchIncantationGates) — brewing is the natural
 --     consummation of that, both granting the effect locally and sending the
 --     AP check.
 --  2. Cauldronsanity (the 86 non-special incantations): intercept and suppress
@@ -107,7 +107,7 @@ end)
 --     the camera correctly returns to Melinoë.
 --  3. Otherwise: vanilla, no AP involvement.
 modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
-	local settings = ap_load_settings()
+	local settings = H2AP_LoadSettings()
 	local itemData = button and button.Data
 	if not (settings and itemData) then return base(screen, button) end
 
@@ -116,16 +116,16 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	if not ap_location then return base(screen, button) end
 
 	-- AP-keyed: fire check, then vanilla brew applies the effect.
-	if is_ap_keyed_incantation(wu_key, settings) then
-		ap_check_location(ap_location)
-		ap_show_boss_reward_banner()
+	if H2AP_IsApKeyedIncantation(wu_key, settings) then
+		H2AP_CheckLocation(ap_location)
+		H2AP_ShowBossRewardBanner()
 		return base(screen, button)
 	end
 
 	-- Cauldronsanity: intercept the 86 non-special incantations.
 	if settings.cauldronsanity == 1
-		and not is_surface_lock_incantation(wu_key)
-		and not is_goal_incantation(wu_key) then
+		and not H2AP_IsSurfaceLockIncantation(wu_key)
+		and not H2AP_IsGoalIncantation(wu_key) then
 		GhostAdminItemPurchasedPresentation(button, itemData)
 		if GameState then
 			GameState.WorldUpgradesAdded[wu_key] = true
@@ -134,8 +134,8 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 			CurrentRun.WorldUpgradesAdded[wu_key] = true
 		end
 		CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
-		ap_check_location(ap_location)
-		ap_show_boss_reward_banner()
+		H2AP_CheckLocation(ap_location)
+		H2AP_ShowBossRewardBanner()
 		return
 	end
 
@@ -151,14 +151,14 @@ end)
 -- AP location check. CheckAchievement still runs after we return but is harmless
 -- since we cleared GiftPresentation[giftName].
 modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, giftName)
-	local settings = ap_load_settings()
+	local settings = H2AP_LoadSettings()
 	if settings and settings.keepsakesanity == 1 then
 		local location = KEEPSAKE_LOCATION_FOR_GIFT[giftName]
 		if location then
 			GameState.GiftPresentation[giftName] = nil
 			GameState.NewKeepsakeItem[giftName]  = nil
-			ap_show_keepsake_check_banner(npc)
-			ap_check_location(location)
+			H2AP_ShowKeepsakeCheckBanner(npc)
+			H2AP_CheckLocation(location)
 			return
 		end
 	end
@@ -171,9 +171,9 @@ end)
 -- gift any NPC without story prerequisites. The side effect is that the keepsake
 -- rack screen uses those same (now-empty) requirements to compute Unlocked, so
 -- every keepsake appears available. Override Unlocked here with a direct
--- GiftPresentation lookup — the same field GiftLogic and give_item both write.
+-- GiftPresentation lookup — the same field GiftLogic and H2AP_GiveItem both write.
 modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, args)
-	local settings = ap_load_settings()
+	local settings = H2AP_LoadSettings()
 	if settings and args and args.UpgradeData and args.UpgradeData.Gift then
 		local gift_id = args.UpgradeData.Gift
 		local from_gift = (GameState.GiftPresentation[gift_id] == true)
@@ -191,7 +191,7 @@ end)
 -- once per Melinoë death and not for enemy deaths.
 modutil.mod.Path.Wrap("KillHero", function(base, victim, triggerArgs)
 	local result = base(victim, triggerArgs)
-	on_melinoe_died()
+	H2AP_OnMelinoeDied()
 	return result
 end)
 
@@ -200,7 +200,7 @@ end)
 -- In reverse_Fear and minimal_Fear modes, vow levels are managed by the mod.
 -- Prevent the player from opening the shrine screen to avoid confusion.
 modutil.mod.Path.Wrap("UseShrineObject", function(base, usee, args)
-	local settings = ap_load_settings()
+	local settings = H2AP_LoadSettings()
 	if settings and settings.fear_system ~= nil and settings.fear_system ~= 3 then
 		print("[HadesII_AP] Shrine interaction blocked (fear system active)")
 		return

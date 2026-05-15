@@ -12,10 +12,10 @@
 -- These need reload.lua (imported in on_reload before on_ready_late fires).
 -- Patch incantation icons + cauldron-visibility gates for the hub screen
 -- before the first SetupMap wrap fires.
-ap_patch_incantation_icons()
-ap_patch_incantation_gates()
+H2AP_PatchIncantationIcons()
+H2AP_PatchIncantationGates()
 -- Flush the outbox immediately so the Python client sees the game is running.
-ap_flush_outbox()
+H2AP_FlushOutbox()
 
 -- ── GiftData fix ──────────────────────────────────────────────────────────────
 

@@ -34,7 +34,7 @@ VOW_SHRINE_MAP = {
 
 -- Returns the shrine upgrade name for a vow AP item, or nil if not a vow item.
 -- Handles both "Vow of Pain Rank 1" (multi-rank) and "Vow of Shadow" (single-rank).
-function get_shrine_for_vow_item(item_name)
+function H2AP_GetShrineForVowItem(item_name)
     local base = item_name:match("^(.+) Rank %d+$") or item_name
     return VOW_SHRINE_MAP[base]
 end
@@ -54,16 +54,16 @@ end
 
 -- Called on every SetupMap, every inbox poll, and after receiving vow items.
 -- Enforces shrine levels according to the active fear system + current AP state.
-function ap_apply_shrine_levels()
-    local settings = ap_load_settings()
+function H2AP_ApplyShrineLevels()
+    local settings = H2AP_LoadSettings()
     if not settings or settings.fear_system == 3 or settings.fear_system == nil then
         if settings and settings.fear_system == nil then
-            print("[HadesII_AP] ap_apply_shrine_levels: settings not ready yet (fear_system nil)")
+            print("[HadesII_AP] H2AP_ApplyShrineLevels: settings not ready yet (fear_system nil)")
         end
         return
     end
     if GameState == nil then
-        print("[HadesII_AP] ap_apply_shrine_levels: GameState nil, skipping")
+        print("[HadesII_AP] H2AP_ApplyShrineLevels: GameState nil, skipping")
         return
     end
 
@@ -72,7 +72,7 @@ function ap_apply_shrine_levels()
 
     if settings.fear_system == 1 then
         -- reverse_Fear: target = initial_rank - items_received (min 0)
-        local state = ap_load_state()
+        local state = H2AP_LoadState()
         local received = state.vow_received or {}
         for shrine_name, initial_rank in pairs(vow_ranks) do
             local unlocked = received[shrine_name] or 0
@@ -93,20 +93,20 @@ function ap_apply_shrine_levels()
     refresh_shrine_cache()
 end
 
--- Called from give_item() when a vow item is received in reverse_Fear mode.
+-- Called from H2AP_GiveItem() when a vow item is received in reverse_Fear mode.
 -- Increments the unlock counter for the shrine upgrade and re-applies levels.
-function give_item_vow(item_name)
-    local shrine_name = get_shrine_for_vow_item(item_name)
+function H2AP_GiveItemVow(item_name)
+    local shrine_name = H2AP_GetShrineForVowItem(item_name)
     if not shrine_name then return false end
 
-    local settings = ap_load_settings()
+    local settings = H2AP_LoadSettings()
     if not settings or settings.fear_system ~= 1 then
         -- minimal_Fear / vanilla: vow items shouldn't be in the pool, but handle gracefully
         print("[HadesII_AP] Vow item ignored (not reverse_Fear): " .. item_name)
         return true
     end
 
-    local state = ap_load_state()
+    local state = H2AP_LoadState()
     state.vow_received = state.vow_received or {}
     state.vow_received[shrine_name] = (state.vow_received[shrine_name] or 0) + 1
 

@@ -18,10 +18,10 @@ end
 -- Called after every inbox poll. Counts how many Zodiac Sand / Void Lens /
 -- Gigaros have been granted (index < items_index) and ensures the matching
 -- story flags are set. Idempotent — safe to call on every poll.
-function sync_story_flags(inbox)
+function H2AP_SyncStoryFlags(inbox)
 	if not GameState then return end
 	local items = inbox.items or {}
-	local state = ap_load_state()
+	local state = H2AP_LoadState()
 	local sand_count  = 0
 	local lens_count  = 0
 	local has_gigaros = false

@@ -32,16 +32,16 @@ AP_ICON_ANIM = _PLUGIN.guid .. "\\ap_icon"
 --  • cauldronsanity → the 86 non-surface, non-goal incantations
 --  • lock_surface_incantations → the two surface-unlock incantations
 --  • true_ending → the two goal incantations
-function ap_patch_incantation_icons()
+function H2AP_PatchIncantationIcons()
 	if WorldUpgradeData == nil then return end
-	local settings = ap_load_settings() or {}
+	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	for key, _ in pairs(INCANTATION_LOCATIONS) do
 		local data = WorldUpgradeData[key]
 		if data then
-			local is_ap = is_ap_keyed_incantation(key, settings)
-				or (do_cauldron and not is_surface_lock_incantation(key)
-					and not is_goal_incantation(key))
+			local is_ap = H2AP_IsApKeyedIncantation(key, settings)
+				or (do_cauldron and not H2AP_IsSurfaceLockIncantation(key)
+					and not H2AP_IsGoalIncantation(key))
 			if is_ap then
 				data.Icon = AP_ICON_ANIM
 			end
@@ -54,16 +54,16 @@ end
 -- receives the AP item (which sets the corresponding TextLinesRecord flag).
 -- Idempotent: a sentinel `_ap_cauldron_gate_patched` on each entry prevents
 -- double-application across hot-reload / SetupMap calls.
-function ap_patch_incantation_gates()
+function H2AP_PatchIncantationGates()
 	if WorldUpgradeData == nil then return end
-	local settings = ap_load_settings() or {}
-	local keyed = ap_keyed_incantations(settings)
+	local settings = H2AP_LoadSettings() or {}
+	local keyed = H2AP_KeyedIncantations(settings)
 	for key in pairs(keyed) do
 		local data = WorldUpgradeData[key]
 		if data and not data._ap_cauldron_gate_patched then
 			data.GameStateRequirements = data.GameStateRequirements or {}
 			table.insert(data.GameStateRequirements, {
-				PathTrue = { "GameState", "TextLinesRecord", ap_unlock_flag_for(key) },
+				PathTrue = { "GameState", "TextLinesRecord", H2AP_UnlockFlagFor(key) },
 			})
 			data._ap_cauldron_gate_patched = true
 		end
@@ -73,7 +73,7 @@ end
 -- Show the AP logo banner when a keepsake gifting location check fires.
 -- Mirrors PlayerReceivedGiftPresentation's sound/voice/color-grading but
 -- uses the AP logo and gift-style banner animations instead of the vanilla keepsake icon.
-function ap_show_keepsake_check_banner(npc)
+function H2AP_ShowKeepsakeCheckBanner(npc)
 	thread(function()
 		AdjustColorGrading({ Name = "Mythmaker", Duration = 0.66 })
 		PlaySound({ Name = "/Leftovers/Menu Sounds/StarSelectConfirm" })
@@ -106,7 +106,7 @@ end
 
 -- Show the AP logo banner when a boss reward location check fires.
 -- Uses the same InfoBanner presentation as the cauldron "AP Check Sent" popup.
-function ap_show_boss_reward_banner()
+function H2AP_ShowBossRewardBanner()
 	thread(function()
 		DisplayInfoBanner(nil, {
 			TitleText = "APCheckSent",
@@ -127,7 +127,7 @@ end
 
 -- Hook ReceivedGiftPresentation (called in GiveGift before the GiftPresentation
 -- check) to send AP location checks in keepsakesanity mode. This fires regardless
--- of whether give_item already set GiftPresentation, which means we always catch
+-- of whether H2AP_GiveItem already set GiftPresentation, which means we always catch
 -- the gifting event and can send the check even if the keepsake was AP-received first.
 -- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
 -- `function ReceivedGiftPresentation(...)` here would silently no-op (LuaENVY-private env).
@@ -137,7 +137,7 @@ end
 local function ap_received_gift_presentation(npc, giftAnimation)
     _ap_orig_ReceivedGiftPresentation(npc, giftAnimation)
     if giftAnimation ~= "GiftNPC" then return end
-    local settings = ap_load_settings()
+    local settings = H2AP_LoadSettings()
     if not (settings and settings.keepsakesanity == 1) then return end
     local name = GetGenusName and GetGenusName(npc)
     local giftData = GiftData and name and GiftData[name]
@@ -147,17 +147,17 @@ local function ap_received_gift_presentation(npc, giftAnimation)
         if gift_id then
             local location = KEEPSAKE_LOCATION_FOR_GIFT and KEEPSAKE_LOCATION_FOR_GIFT[gift_id]
             if location then
-                local state = ap_load_state()
+                local state = H2AP_LoadState()
                 local already_sent = false
                 for _, cl in ipairs(state.checked_locations or {}) do
                     if cl == location then already_sent = true; break end
                 end
-                ap_check_location(location)
+                H2AP_CheckLocation(location)
                 if GameState and GameState.GiftPresentation then
                     GameState.GiftPresentation[gift_id] = true
                 end
                 if not already_sent then
-                    ap_show_keepsake_check_banner(npc)
+                    H2AP_ShowKeepsakeCheckBanner(npc)
                 end
             end
         end
@@ -169,9 +169,9 @@ print("[HadesII_AP] ReceivedGiftPresentation override installed")
 -- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
 
 -- Hint each visible incantation when a cauldron category is displayed (initial
--- open + every tab switch). ap_hint_cauldron_visible reads screen.AvailableItems
+-- open + every tab switch). H2AP_HintCauldronVisible reads screen.AvailableItems
 -- which the original GhostAdminDisplayCategory has just populated, then dedupes
--- via ap_hint_location so each location is hinted at most once.
+-- via H2AP_HintLocation so each location is hinted at most once.
 -- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
 -- `function GhostAdminDisplayCategory(...)` here would silently no-op (LuaENVY-private env).
 if not _ap_orig_GhostAdminDisplayCategory then
@@ -179,7 +179,7 @@ if not _ap_orig_GhostAdminDisplayCategory then
 end
 local function ap_ghost_admin_display_category(screen, button)
     _ap_orig_GhostAdminDisplayCategory(screen, button)
-    ap_hint_cauldron_visible(screen)
+    H2AP_HintCauldronVisible(screen)
 end
 modutil.mod.Path.Set("GhostAdminDisplayCategory", ap_ghost_admin_display_category)
 print("[HadesII_AP] GhostAdminDisplayCategory override installed")
@@ -193,7 +193,7 @@ if not _ap_orig_OpenQuestLogScreen then
 end
 local function ap_open_quest_log_screen(args)
     local result = _ap_orig_OpenQuestLogScreen(args)
-    ap_hint_questlog_visible()
+    H2AP_HintQuestlogVisible()
     return result
 end
 modutil.mod.Path.Set("OpenQuestLogScreen", ap_open_quest_log_screen)
@@ -202,7 +202,7 @@ print("[HadesII_AP] OpenQuestLogScreen override installed")
 -- ── Fatesanity: intercept prophecy cashout ───────────────────────────────────
 
 -- For prophecies that are AP locations (fatesanity on), suppress the vanilla
--- AddResource — the resource is granted instead by give_item when the AP item
+-- AddResource — the resource is granted instead by H2AP_GiveItem when the AP item
 -- comes back from the server. The function body is inline-replicated from
 -- QuestLogLogic.lua:211 so we can drop just the one AddResource line; see
 -- the cauldron-incantation pattern (HandleGhostAdminPurchase) for the same idea.
@@ -210,7 +210,7 @@ if not _ap_orig_CashOutQuest then
     _ap_orig_CashOutQuest = CashOutQuest
 end
 local function ap_cash_out_quest(screen, button)
-    local settings = ap_load_settings()
+    local settings = H2AP_LoadSettings()
     local questData = button and button.Data
     local quest_name = questData and questData.Name
     local ap_location = quest_name and PROPHECY_LOCATIONS[quest_name]
@@ -223,7 +223,7 @@ local function ap_cash_out_quest(screen, button)
     end
     button.OnPressedFunctionName = nil
     if GameState.QuestStatus[quest_name] ~= "CashedOut" then
-        ap_check_location(ap_location)
+        H2AP_CheckLocation(ap_location)
         GameState.QuestStatus[quest_name] = "CashedOut"
         QuestCashedOutPresentation(screen, button)
     end
@@ -246,7 +246,7 @@ print("[HadesII_AP] CashOutQuest override installed")
 
 -- Suppress the vanilla weapon/aspect unlock when the corresponding sanity option
 -- is on. Player still pays cost; AddWorldUpgrade and the equip thread are skipped.
--- give_item handles the real unlock when the AP item arrives. WorldUpgradesAdded
+-- H2AP_GiveItem handles the real unlock when the AP item arrives. WorldUpgradesAdded
 -- is set so the slot shows as purchased and can't be re-bought.
 -- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
 -- `function HandleWeaponShopPurchase(...)` here would silently no-op (LuaENVY-private env).
@@ -254,7 +254,7 @@ if not _ap_orig_HandleWeaponShopPurchase then
     _ap_orig_HandleWeaponShopPurchase = HandleWeaponShopPurchase
 end
 local function ap_handle_weapon_shop_purchase(screen, button)
-    local settings = ap_load_settings()
+    local settings = H2AP_LoadSettings()
     local itemData = button and button.Data
     if settings and itemData then
         local item_name = itemData.Name
@@ -297,8 +297,8 @@ local function ap_handle_weapon_shop_purchase(screen, button)
                 screen.Components["Icon" .. button.Index] = nil
             end
             CloseWeaponShopScreen(screen, button, {})
-            ap_check_location(ap_location)
-            ap_show_boss_reward_banner()
+            H2AP_CheckLocation(ap_location)
+            H2AP_ShowBossRewardBanner()
             return
         end
     end
@@ -319,8 +319,8 @@ if not _ap_orig_StartNewRun then
 end
 local function ap_start_new_run(prevRun, args)
 	local result = _ap_orig_StartNewRun(prevRun, args)
-	pcall(ap_apply_max_health_helper)
-	pcall(ap_apply_initial_money_helper)
+	pcall(H2AP_ApplyMaxHealthHelper)
+	pcall(H2AP_ApplyInitialMoneyHelper)
 	return result
 end
 modutil.mod.Path.Set("StartNewRun", ap_start_new_run)
@@ -334,7 +334,7 @@ if not _ap_orig_GetRarityChances then
 end
 local function ap_get_rarity_chances(loot)
 	local rarityChances = _ap_orig_GetRarityChances(loot)
-	local boost = ap_boon_boost_pct and ap_boon_boost_pct() or 0
+	local boost = H2AP_BoonBoostPct and H2AP_BoonBoostPct() or 0
 	if boost > 0 and rarityChances then
 		for k, v in pairs(rarityChances) do
 			rarityChances[k] = v + boost
@@ -364,14 +364,14 @@ function sjson_HelpText(data)
 	-- respective sanity option is on. DisplayName comes from ap_location_items.json
 	-- (written by the Python client after LocationScouts); falls back to a generic
 	-- "AP Location Check" if the file isn't there yet.
-	local settings = ap_load_settings() or {}
+	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	local do_fate = settings.fatesanity == 1
-	local keyed = ap_keyed_incantations(settings)
+	local keyed = H2AP_KeyedIncantations(settings)
 	local has_keyed = next(keyed) ~= nil
 	if not (do_cauldron or do_fate or has_keyed) then return end
 
-	local location_items = ap_read_location_items() or {}
+	local location_items = H2AP_ReadLocationItems() or {}
 
 	-- Resolve an incantation key to the AP location name it represents, only
 	-- when that key is AP-controlled in the current settings. The 86
@@ -380,8 +380,8 @@ function sjson_HelpText(data)
 	local function incantation_location_for(id)
 		if keyed[id] then return INCANTATION_LOCATIONS[id] end
 		if do_cauldron
-			and not is_surface_lock_incantation(id)
-			and not is_goal_incantation(id) then
+			and not H2AP_IsSurfaceLockIncantation(id)
+			and not H2AP_IsGoalIncantation(id) then
 			return INCANTATION_LOCATIONS[id]
 		end
 		return nil

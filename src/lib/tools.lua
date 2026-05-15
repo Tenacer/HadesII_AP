@@ -5,7 +5,7 @@
 -- Tools are always in the AP item/location pool (no toolsanity option yet).
 -- Maps are symmetric to weapons.lua / WEAPON_LOCATIONS.
 
--- AP item name → game internal tool name (for give_item).
+-- AP item name → game internal tool name (for H2AP_GiveItem).
 TOOL_ITEM_TO_NAME = {
 	["Crescent Pickaxe Tool Unlock Item"] = "ToolPickaxe",
 	["Silver Spade Tool Unlock Item"]     = "ToolShovel",
@@ -13,7 +13,7 @@ TOOL_ITEM_TO_NAME = {
 	["Rod of Fishing Tool Unlock Item"]   = "ToolFishingRod",
 }
 
--- Game internal tool name → AP location name (for ap_check_tool_unlocks).
+-- Game internal tool name → AP location name (for H2AP_CheckToolUnlocks).
 TOOL_LOCATIONS = {
 	ToolPickaxe      = "Crescent Pickaxe Tool Unlock Location",
 	ToolShovel       = "Silver Spade Tool Unlock Location",
@@ -21,15 +21,15 @@ TOOL_LOCATIONS = {
 	ToolFishingRod   = "Rod of Fishing Tool Unlock Location",
 }
 
--- Polled from prefix_SetupMap: send the AP location check for any tool that's
+-- Polled from H2AP_SetupMap: send the AP location check for any tool that's
 -- currently unlocked but hasn't been reported yet. Covers both unlock paths —
--- the player buying the tool at Skelly's shop, and give_item granting the
--- tool when the AP item arrives. ap_check_location is idempotent.
-function ap_check_tool_unlocks()
+-- the player buying the tool at Skelly's shop, and H2AP_GiveItem granting the
+-- tool when the AP item arrives. H2AP_CheckLocation is idempotent.
+function H2AP_CheckToolUnlocks()
 	if not GameState or not GameState.WeaponsUnlocked then return end
 	for tool, location in pairs(TOOL_LOCATIONS) do
 		if GameState.WeaponsUnlocked[tool] then
-			ap_check_location(location)
+			H2AP_CheckLocation(location)
 		end
 	end
 end

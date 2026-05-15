@@ -3,25 +3,25 @@
 
 -- ── Item granting ─────────────────────────────────────────────────────────────
 
-function give_item(item_name)
+function H2AP_GiveItem(item_name)
 	-- Vow items: reverse_Fear only — unlock a rank of the corresponding shrine vow.
-	if get_shrine_for_vow_item(item_name) then
-		return give_item_vow(item_name)
+	if H2AP_GetShrineForVowItem(item_name) then
+		return H2AP_GiveItemVow(item_name)
 	end
 
-	-- Traps: queue mid-run effects (drained from prefix_SetupMap).
+	-- Traps: queue mid-run effects (drained from H2AP_SetupMap).
 	if TRAP_ITEMS and TRAP_ITEMS[item_name] then
-		return give_item_trap(item_name)
+		return H2AP_GiveItemTrap(item_name)
 	end
 
 	-- Helpers: persistent stat boosts (MaxHealth, InitialMoney, BoonBoost).
 	if HELPER_ITEMS and HELPER_ITEMS[item_name] then
-		return give_item_helper(item_name)
+		return H2AP_GiveItemHelper(item_name)
 	end
 
 	local filler = FILLER_ITEMS[item_name]
 	if filler then
-		local settings = ap_load_settings()
+		local settings = H2AP_LoadSettings()
 		local amount = (settings and settings[filler.setting]) or 1
 		AddResource(filler.resource, amount, _PLUGIN.guid)
 		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
@@ -36,9 +36,9 @@ function give_item(item_name)
 	-- the vanilla effect — this is the only path that grants the effect.
 	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
 	if wu_key then
-		local settings = ap_load_settings()
-		if is_ap_keyed_incantation(wu_key, settings) then
-			local flag = ap_unlock_flag_for(wu_key)
+		local settings = H2AP_LoadSettings()
+		if H2AP_IsApKeyedIncantation(wu_key, settings) then
+			local flag = H2AP_UnlockFlagFor(wu_key)
 			GameState.TextLinesRecord = GameState.TextLinesRecord or {}
 			GameState.TextLinesRecord[flag] = true
 			if CurrentRun and CurrentRun.TextLinesRecord then
@@ -59,7 +59,7 @@ function give_item(item_name)
 		print("[HadesII_AP] Incantation unlocked: " .. item_name)
 		return true
 	end
-	-- True Ending ingredients: grant the resource and let sync_story_flags handle flags.
+	-- True Ending ingredients: grant the resource and let H2AP_SyncStoryFlags handle flags.
 	if item_name == "Zodiac Sand" then
 		AddResource("MixerIBoss", 1, _PLUGIN.guid)
 		print("[HadesII_AP] Gave Zodiac Sand (MixerIBoss)")
@@ -90,7 +90,7 @@ function give_item(item_name)
 	end
 	-- Tools: unlock the tool so HasAccessToTool returns true. WorldUpgradesAdded
 	-- marks the shop slot as already-purchased so the player isn't charged again.
-	-- The location check fires from ap_check_tool_unlocks (called in prefix_SetupMap).
+	-- The location check fires from H2AP_CheckToolUnlocks (called in H2AP_SetupMap).
 	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
 	if tool then
 		GameState.WeaponsUnlocked[tool]         = true

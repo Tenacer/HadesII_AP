@@ -7,9 +7,9 @@
 
 local _settings = nil
 
-function ap_load_settings()
+function H2AP_LoadSettings()
 	if _settings then return _settings end
-	local f = io.open(ap_dir() .. "ap_settings.json", "r")
+	local f = io.open(H2AP_Dir() .. "ap_settings.json", "r")
 	if not f then
 		-- Don't cache — return empty without setting _settings so the next call
 		-- retries. The Python client may not have connected yet.
@@ -17,7 +17,7 @@ function ap_load_settings()
 	end
 	local raw = f:read("*a")
 	f:close()
-	_settings = json_decode(raw) or {}
+	_settings = H2AP_JsonDecode(raw) or {}
 	print("[HadesII_AP] Settings loaded: fear_system=" .. tostring(_settings.fear_system)
 		.. " score_rewards=" .. tostring(_settings.score_rewards_amount))
 	return _settings

@@ -7,16 +7,16 @@
 -- game restarts. Python client dedupes again via its own session set, then sends
 -- LocationScouts with create_as_hint=2 (free hint, no point cost).
 
-function ap_hint_location(name)
-	local state = ap_load_state()
+function H2AP_HintLocation(name)
+	local state = H2AP_LoadState()
 	state.hinted_locations = state.hinted_locations or {}
 	for _, existing in ipairs(state.hinted_locations) do
 		if existing == name then return false end
 	end
 	table.insert(state.hinted_locations, name)
 	print("[HadesII_AP] Location hinted: " .. name)
-	ap_save_state()
-	ap_flush_outbox()
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
 	return true
 end
 
@@ -26,11 +26,11 @@ end
 -- non-repeatable items + reveal-capped items). We hint each one whose key is in
 -- INCANTATION_LOCATIONS.
 
-function ap_hint_cauldron_visible(screen)
-	local settings = ap_load_settings()
+function H2AP_HintCauldronVisible(screen)
+	local settings = H2AP_LoadSettings()
 	if not settings then return end
 	local do_cauldron = settings.cauldronsanity == 1
-	local keyed = ap_keyed_incantations(settings)
+	local keyed = H2AP_KeyedIncantations(settings)
 	if not (do_cauldron or next(keyed)) then return end
 	if not (screen and screen.AvailableItems) then return end
 	for _, itemData in ipairs(screen.AvailableItems) do
@@ -44,12 +44,12 @@ function ap_hint_cauldron_visible(screen)
 			if keyed[name] then
 				should_hint = true
 			elseif do_cauldron
-				and not is_surface_lock_incantation(name)
-				and not is_goal_incantation(name) then
+				and not H2AP_IsSurfaceLockIncantation(name)
+				and not H2AP_IsGoalIncantation(name) then
 				should_hint = true
 			end
 			if should_hint then
-				ap_hint_location(ap_location)
+				H2AP_HintLocation(ap_location)
 			end
 		end
 	end
@@ -60,8 +60,8 @@ end
 -- "CashedOut" AND its UnlockGameStateRequirements are met. CashedOut quests have
 -- already had their AP check sent so hinting them adds nothing.
 
-function ap_hint_questlog_visible()
-	local settings = ap_load_settings()
+function H2AP_HintQuestlogVisible()
+	local settings = H2AP_LoadSettings()
 	if not (settings and settings.fatesanity == 1) then return end
 	if not (QuestOrderData and QuestData and GameState and GameState.QuestStatus) then return end
 	for _, questName in ipairs(QuestOrderData) do
@@ -70,7 +70,7 @@ function ap_hint_questlog_visible()
 			local ap_location = PROPHECY_LOCATIONS[questData.Name]
 			if ap_location and GameState.QuestStatus[questData.Name] ~= "CashedOut" then
 				if IsGameStateEligible(questData, questData.UnlockGameStateRequirements) then
-					ap_hint_location(ap_location)
+					H2AP_HintLocation(ap_location)
 				end
 			end
 		end
@@ -81,15 +81,15 @@ end
 -- Backstop for the CashOutQuest override (reload.lua). The override fires the
 -- AP check the moment the player clicks cashout; this poll catches anything
 -- that slipped through (mod reload mid-cashout, save-state edge cases) on the
--- next prefix_SetupMap. ap_check_location is idempotent.
+-- next H2AP_SetupMap. H2AP_CheckLocation is idempotent.
 
-function ap_check_quest_completions()
-	local settings = ap_load_settings()
+function H2AP_CheckQuestCompletions()
+	local settings = H2AP_LoadSettings()
 	if not (settings and settings.fatesanity == 1) then return end
 	if not (GameState and GameState.QuestStatus) then return end
 	for quest_id, location in pairs(PROPHECY_LOCATIONS) do
 		if GameState.QuestStatus[quest_id] == "CashedOut" then
-			ap_check_location(location)
+			H2AP_CheckLocation(location)
 		end
 	end
 end

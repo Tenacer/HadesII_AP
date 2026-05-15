@@ -35,7 +35,7 @@ end
 
 -- ── Trap dispatch ────────────────────────────────────────────────────────────
 
-function give_item_trap(item_name)
+function H2AP_GiveItemTrap(item_name)
 	init_lodger()
 	if item_name == "Money Punishment" then
 		GameState.AP_TrapQueue.MoneyPending = GameState.AP_TrapQueue.MoneyPending + 1
@@ -50,15 +50,15 @@ end
 
 -- ── Helper dispatch ──────────────────────────────────────────────────────────
 
-function give_item_helper(item_name)
+function H2AP_GiveItemHelper(item_name)
 	init_lodger()
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
 		L.MaxHealth = L.MaxHealth + 1
-		ap_apply_max_health_helper()
+		H2AP_ApplyMaxHealthHelper()
 	elseif item_name == "Initial Money Helper" then
 		L.InitialMoney = L.InitialMoney + 1
-		-- Effect applied at next StartNewRun via ap_apply_initial_money_helper.
+		-- Effect applied at next StartNewRun via H2AP_ApplyInitialMoneyHelper.
 	elseif item_name == "Boon Boost Helper" then
 		L.BoonBoost = L.BoonBoost + 1
 		-- Effect applied via the GetRarityChances override.
@@ -73,7 +73,7 @@ end
 -- Re-apply the cumulative MaxHealth bonus to HeroData.DefaultHero (and to
 -- CurrentRun.Hero if a run is active). Idempotent: MaxHealthApplied tracks
 -- what we've already added so reload / re-call won't double-stack.
-function ap_apply_max_health_helper()
+function H2AP_ApplyMaxHealthHelper()
 	init_lodger()
 	local L = GameState.AP_HelperLodger
 	local target = L.MaxHealth * HELPER_MAX_HEALTH_PER
@@ -93,7 +93,7 @@ end
 
 -- Add the persistent starting-money bonus on top of vanilla starting money.
 -- Called from the StartNewRun override in reload.lua after the base call.
-function ap_apply_initial_money_helper()
+function H2AP_ApplyInitialMoneyHelper()
 	init_lodger()
 	local L = GameState.AP_HelperLodger
 	if L.InitialMoney <= 0 then return end
@@ -101,7 +101,7 @@ function ap_apply_initial_money_helper()
 end
 
 -- Returns the additive rarity boost (0..1) to apply to every rarity bucket.
-function ap_boon_boost_pct()
+function H2AP_BoonBoostPct()
 	init_lodger()
 	return (GameState.AP_HelperLodger.BoonBoost or 0) * HELPER_BOON_BOOST_PER
 end
@@ -120,7 +120,7 @@ local function unsafe_to_apply_traps()
 	return false
 end
 
-function ap_process_trap_queue()
+function H2AP_ProcessTrapQueue()
 	init_lodger()
 	if unsafe_to_apply_traps() then return end
 	local q = GameState.AP_TrapQueue
@@ -136,7 +136,7 @@ function ap_process_trap_queue()
 				SkipResourceSpendPresentation = true,
 			})
 			q.MoneyPending = q.MoneyPending - n
-			ap_notify("Trap: lost " .. (n * TRAP_MONEY_AMOUNT) .. " Money",
+			H2AP_Notify("Trap: lost " .. (n * TRAP_MONEY_AMOUNT) .. " Money",
 				{ 1.0, 0.5, 0.5, 1.0 })
 		end
 	end
@@ -148,7 +148,7 @@ function ap_process_trap_queue()
 			local n = q.HealthPending
 			hero.Health = math.max((hero.Health or 0) - damage * n, 1)
 			q.HealthPending = 0
-			ap_notify("Trap: " .. n .. "x Health Punishment",
+			H2AP_Notify("Trap: " .. n .. "x Health Punishment",
 				{ 1.0, 0.5, 0.5, 1.0 })
 			if ShowHealthUI then ShowHealthUI() end
 		end

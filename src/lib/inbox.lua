@@ -3,25 +3,25 @@
 
 -- ── Inbox processing ──────────────────────────────────────────────────────────
 
-function ap_process_inbox()
-	local inbox = ap_read_inbox()
+function H2AP_ProcessInbox()
+	local inbox = H2AP_ReadInbox()
 	if not inbox then return end
 
 	-- The Python client may have written new scout responses to
 	-- ap_location_items_<world>.json since our last cache fill (e.g. a
 	-- LocationInfo arrived just after Connected). Drop the cache so the next
 	-- consumer (boss-reward spawn, sjson re-hook) sees fresh data.
-	ap_invalidate_location_items_cache()
+	H2AP_InvalidateLocationItemsCache()
 
 	-- DeathLink: Python client appends this when another player dies.
 	-- deathlink_seq is an incrementing counter so each death only triggers once
 	-- even if the flag stays in the inbox across multiple polls.
 	if inbox.deathlink then
 		local seq = inbox.deathlink_seq or 0
-		local state = ap_load_state()
+		local state = H2AP_LoadState()
 		if seq ~= (state.last_deathlink_seq or -1) then
 			state.last_deathlink_seq = seq
-			ap_save_state()
+			H2AP_SaveState()
 			if CurrentRun and CurrentRun.Hero and not CurrentRun.Hero.IsDead
 					and CurrentRun.CurrentRoom and not SessionMapState.HandlingDeath then
 				print("[HadesII_AP] DeathLink from: " .. tostring(inbox.deathlink_source or "unknown"))
@@ -33,48 +33,48 @@ function ap_process_inbox()
 	end
 
 	-- Grant items in index order, skipping ones already processed.
-	local state   = ap_load_state()
+	local state   = H2AP_LoadState()
 	local items   = inbox.items or {}
 	local granted = 0
 
 	for _, item in ipairs(items) do
 		local idx = item.index
 		if idx ~= nil and idx >= state.items_index then
-			if give_item(item.item_name or "") then
+			if H2AP_GiveItem(item.item_name or "") then
 				state.items_index = idx + 1
 				granted = granted + 1
-				ap_notify_received(item.item_name or "")
+				H2AP_NotifyReceived(item.item_name or "")
 			end
 		end
 	end
 
 	if granted > 0 then
 		print("[HadesII_AP] Granted " .. granted .. " item(s) from AP")
-		ap_save_state()
-		ap_flush_outbox()
+		H2AP_SaveState()
+		H2AP_FlushOutbox()
 	end
 
 	-- Sync story flags on every poll (idempotent). Also covers restarts where
 	-- items_index is restored from state but GameState flags need re-applying.
-	sync_story_flags(inbox)
+	H2AP_SyncStoryFlags(inbox)
 
 	-- Re-apply shrine levels on every poll so they take effect as soon as
 	-- ap_settings.json is written by the Python client, even mid-hub-session.
-	ap_apply_shrine_levels()
+	H2AP_ApplyShrineLevels()
 end
 
 -- ── Room hooks ────────────────────────────────────────────────────────────────
 
-function prefix_SetupMap()
-	local state = ap_load_state()
+function H2AP_SetupMap()
+	local state = H2AP_LoadState()
 	print("[HadesII_AP] Map loaded — score: " .. state.score
 		.. ", checks: " .. state.checks_sent
 		.. ", items: "  .. state.items_index)
-	ap_apply_shrine_levels()
-	ap_patch_vow_requirements()
-	ap_init_weapon_state()
-	ap_process_inbox()
-	ap_check_tool_unlocks()
-	ap_check_quest_completions()
-	ap_process_trap_queue()
+	H2AP_ApplyShrineLevels()
+	H2AP_PatchVowRequirements()
+	H2AP_InitWeaponState()
+	H2AP_ProcessInbox()
+	H2AP_CheckToolUnlocks()
+	H2AP_CheckQuestCompletions()
+	H2AP_ProcessTrapQueue()
 end

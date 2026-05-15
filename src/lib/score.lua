@@ -46,51 +46,51 @@ RESOURCE_OBSTACLE_FOR_ITEM = {
 AP_ICON_CARRIER_OBSTACLE = "WeaponPointsRareDrop"
 
 -- Returns the boss key ("chronos"/"typhon") if this room is a final boss room.
-function ap_boss_for_room(currentRoom)
+function H2AP_BossForRoom(currentRoom)
 	if not currentRoom then return nil end
 	return BOSS_ROOM_TO_BOSS[currentRoom.Name]
 end
 
 -- Returns how many AP-check rewards the player should get for this boss before
 -- vanilla fallback drops (Nightmare + Gemstones) take over.
-function ap_boss_kills_needed(boss_key)
-	local settings = ap_load_settings() or {}
+function H2AP_BossKillsNeeded(boss_key)
+	local settings = H2AP_LoadSettings() or {}
 	local opt_key = boss_key .. "_kills_needed"
 	local v = settings[opt_key]
 	if type(v) == "number" then return v end
 	return BOSS_DEFAULT_KILLS_NEEDED[boss_key] or 1
 end
 
--- Total kills observed for this boss so far (after on_room_cleared has fired
+-- Total kills observed for this boss so far (after H2AP_OnRoomCleared has fired
 -- for the current kill, this is THIS kill's 1-indexed count).
-function ap_boss_kill_count(boss_key)
-	local state = ap_load_state()
+function H2AP_BossKillCount(boss_key)
+	local state = H2AP_LoadState()
 	return state[boss_key .. "_kills"] or 0
 end
 
 -- Decides what the boss reward should do this room. Returns one of:
---   "ap_check"  → on_room_cleared already sent the AP check, suppress vanilla
+--   "ap_check"  → H2AP_OnRoomCleared already sent the AP check, suppress vanilla
 --   "fallback"  → past the configured kill count, drop Nightmare + Gemstones
 --   "vanilla"   → not a TrueEnding boss kill, leave the reward untouched
 --   nil         → not a boss room
--- Must be called AFTER on_room_cleared has incremented the kill counter.
-function ap_boss_reward_action(currentRoom)
-	local boss_key = ap_boss_for_room(currentRoom)
+-- Must be called AFTER H2AP_OnRoomCleared has incremented the kill counter.
+function H2AP_BossRewardAction(currentRoom)
+	local boss_key = H2AP_BossForRoom(currentRoom)
 	if not boss_key then return nil end
-	local settings = ap_load_settings() or {}
+	local settings = H2AP_LoadSettings() or {}
 	if not (settings.true_ending == true or settings.true_ending == 1) then
 		return "vanilla"
 	end
-	local count = ap_boss_kill_count(boss_key)
-	if count <= ap_boss_kills_needed(boss_key) then
+	local count = H2AP_BossKillCount(boss_key)
+	if count <= H2AP_BossKillsNeeded(boss_key) then
 		return "ap_check"
 	end
 	return "fallback"
 end
 
 -- Kept for compatibility — true if SpawnRoomReward should NOT call base().
-function should_replace_reward(currentRoom)
-	local action = ap_boss_reward_action(currentRoom)
+function H2AP_ShouldReplaceReward(currentRoom)
+	local action = H2AP_BossRewardAction(currentRoom)
 	return action == "ap_check" or action == "fallback"
 end
 
@@ -102,7 +102,7 @@ end
 --   name        — ConsumableData entry (e.g. "WeaponPointsRareDrop", "GemPointsBigDrop")
 --   angle_deg   — angle from the hero to spawn at (degrees, 0 = right)
 --   distance    — pixels from the hero
-function ap_spawn_consumable_drop(name, angle_deg, distance)
+function H2AP_SpawnConsumableDrop(name, angle_deg, distance)
 	if not (CurrentRun and CurrentRun.Hero) then return nil end
 	distance = distance or 110
 	local rad = math.rad(angle_deg or 0)
@@ -132,22 +132,22 @@ function ap_spawn_consumable_drop(name, angle_deg, distance)
 end
 
 -- The AP location name for the CURRENT (just-finished) kill — derived from
--- the per-boss kill counter that on_room_cleared just incremented.
-function ap_boss_current_location_name(boss_key)
+-- the per-boss kill counter that H2AP_OnRoomCleared just incremented.
+function H2AP_BossCurrentLocationName(boss_key)
 	if not boss_key then return nil end
-	local count = ap_boss_kill_count(boss_key)
+	local count = H2AP_BossKillCount(boss_key)
 	if count <= 0 then return nil end
 	return BOSS_LOCATION_BASE_NAME[boss_key] .. " " .. tostring(count)
 end
 
 -- OnUsed handler for the AP-boss-reward obstacles. Reads the AP location name
--- attached to the obstacle (set in ap_spawn_ap_boss_reward) and sends the
--- check. Idempotent — ap_check_location dedupes against state.checked_locations.
-function ap_on_boss_drop_used(usee, args)
+-- attached to the obstacle (set in H2AP_SpawnApBossReward) and sends the
+-- check. Idempotent — H2AP_CheckLocation dedupes against state.checked_locations.
+function H2AP_OnBossDropUsed(usee, args)
 	if usee and usee.APLocation then
 		print("[HadesII_AP] Boss reward picked up — sending " .. usee.APLocation)
-		ap_check_location(usee.APLocation)
-		ap_show_boss_reward_banner()
+		H2AP_CheckLocation(usee.APLocation)
+		H2AP_ShowBossRewardBanner()
 	end
 	-- The vanilla UseConsumableItem clears AddResources/Cost handling. We've
 	-- nilled AddResources, so calling it here is a clean no-op apart from the
@@ -161,22 +161,22 @@ end
 -- (matching resource drop, or AP-icon-overridden carrier) based on the
 -- scouted item placed at this AP location.
 --   ap_location  — AP location name (e.g. "Chronos Kill Reward 3")
-function ap_spawn_ap_boss_reward(ap_location)
+function H2AP_SpawnApBossReward(ap_location)
 	if not (CurrentRun and CurrentRun.Hero) then return nil end
-	local entry = ap_get_location_item(ap_location)
+	local entry = H2AP_GetLocationItem(ap_location)
 	local resource_obstacle = nil
 	if entry and entry.is_local and entry.item_name then
 		resource_obstacle = RESOURCE_OBSTACLE_FOR_ITEM[entry.item_name]
 	end
 
 	local obstacle_name = resource_obstacle or AP_ICON_CARRIER_OBSTACLE
-	local reward = ap_spawn_consumable_drop(obstacle_name, 0, 110)
+	local reward = H2AP_SpawnConsumableDrop(obstacle_name, 0, 110)
 	if not reward then return nil end
 
 	-- Suppress the underlying resource grant — AP delivers the actual item via
 	-- the inbox cycle. The obstacle is purely a visual + AP-check trigger.
 	reward.AddResources         = nil
-	reward.OnUsedFunctionName   = "ap_on_boss_drop_used"
+	reward.OnUsedFunctionName   = "H2AP_OnBossDropUsed"
 	reward.APLocation           = ap_location
 
 	-- For the AP-icon case (carrier obstacle, no scouted resource match),
@@ -187,20 +187,20 @@ function ap_spawn_ap_boss_reward(ap_location)
 	return reward
 end
 
-function on_room_cleared(currentRoom, currentEncounter)
+function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	if not currentRoom then return end
 
 	-- Boss rooms: increment the per-boss kill counter; the AP location check
-	-- is deferred to the obstacle's OnUsed handler (ap_on_boss_drop_used)
+	-- is deferred to the obstacle's OnUsed handler (H2AP_OnBossDropUsed)
 	-- so the player has to pick the reward up. Always handle the exit redirect.
-	local boss_key = ap_boss_for_room(currentRoom)
+	local boss_key = H2AP_BossForRoom(currentRoom)
 	if boss_key then
-		local state = ap_load_state()
+		local state = H2AP_LoadState()
 		local field = boss_key .. "_kills"
 		state[field] = (state[field] or 0) + 1
-		ap_save_state()
+		H2AP_SaveState()
 
-		local settings = ap_load_settings() or {}
+		local settings = H2AP_LoadSettings() or {}
 		-- In AP mode, redirect the exit to EndEarlyAccessPresentation (the proper
 		-- run-completion sequence) instead of loading the post-boss story room.
 		-- Exception: True Ending mode with both goal incantations unlocked — the
@@ -221,23 +221,23 @@ function on_room_cleared(currentRoom, currentEncounter)
 	end
 
 	-- Regular rooms: accumulate score → trigger score checks.
-	local state    = ap_load_state()
-	local settings = ap_load_settings()
+	local state    = H2AP_LoadState()
+	local settings = H2AP_LoadSettings()
 
 	local points    = config.points_per_room or 1
 	local threshold = config.points_per_location or 10
 	local max_checks = settings.score_rewards_amount or 150
 
 	state.score = state.score + points
-	ap_notify_score(state.score, points)
+	H2AP_NotifyScore(state.score, points)
 	local new_checks = math.min(math.floor(state.score / threshold), max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
-		ap_notify_milestone(state.checks_sent, max_checks)
+		H2AP_NotifyMilestone(state.checks_sent, max_checks)
 	end
 
 	print("[HadesII_AP] +" .. points .. " pts → " .. state.score .. " total")
-	ap_save_state()
-	ap_flush_outbox()
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
 end

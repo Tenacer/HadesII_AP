@@ -33,7 +33,7 @@ WEAPON_LOCATIONS = {
 	WeaponSuit       = "Coat Weapon Unlock Location",
 }
 
--- AP item name → game internal weapon name (for give_item).
+-- AP item name → game internal weapon name (for H2AP_GiveItem).
 WEAPON_ITEM_TO_NAME = {
 	["Staff Weapon Unlock Item"]   = "WeaponStaffSwing",
 	["Daggers Weapon Unlock Item"] = "WeaponDagger",
@@ -54,7 +54,7 @@ HIDDEN_ASPECT_LOCATIONS = {
 	SuitComboAspect      = "Coat Weapon Shiva Aspect Unlock Location",
 }
 
--- AP item name → game internal aspect name (for give_item).
+-- AP item name → game internal aspect name (for H2AP_GiveItem).
 HIDDEN_ASPECT_ITEM_TO_NAME = {
 	["Staff Weapon Anubis Aspect Unlock Item"]    = "StaffRaiseDeadAspect",
 	["Daggers Weapon Morrigan Aspect Unlock Item"] = "DaggerTripleAspect",
@@ -64,7 +64,7 @@ HIDDEN_ASPECT_ITEM_TO_NAME = {
 	["Coat Weapon Shiva Aspect Unlock Item"]      = "SuitComboAspect",
 }
 
-local settings = ap_load_settings()
+local settings = H2AP_LoadSettings()
 local target = settings and AP_STARTING_WEAPONS[settings.initial_weapon or 0]
 
 if target and HeroData then
@@ -73,9 +73,9 @@ end
 
 -- Fixes GameState weapon unlock flags and WeaponShopItemData so the Training
 -- Grounds UI reflects the correct state between runs. Safe to call many times.
-function ap_init_weapon_state()
+function H2AP_InitWeaponState()
 	if not GameState then return end
-	local s = ap_load_settings()
+	local s = H2AP_LoadSettings()
 	local t = s and AP_STARTING_WEAPONS[s.initial_weapon or 0]
 	if not t or t == "WeaponStaffSwing" then return end
 
@@ -112,7 +112,7 @@ end
 
 function CreateNewHero(prevRun, args)
 	local hero = _ap_orig_CreateNewHero(prevRun, args)
-	local s = ap_load_settings()
+	local s = H2AP_LoadSettings()
 	local t = s and AP_STARTING_WEAPONS[s.initial_weapon or 0]
 	if not t or t == "WeaponStaffSwing" then return hero end
 	if hero.Weapons[t] and not hero.Weapons["WeaponStaffSwing"] then return hero end

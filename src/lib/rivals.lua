@@ -8,7 +8,7 @@
 -- With vanilla fear_system the override is inert.
 
 local function ap_reverse_active()
-    local settings = ap_load_settings()
+    local settings = H2AP_LoadSettings()
     if not settings then return false end
     if settings.reverse_order_rivals ~= 1 then return false end
     if settings.fear_system ~= 1 and settings.fear_system ~= 2 then return false end
@@ -74,7 +74,7 @@ print("[HadesII_AP] Reverse rivals: IsBossDifficultyShrineUpgradeActive override
 -- the easiest bosses).
 --
 -- Mutating WorldUpgradeData at module load time triggers the App.Reset GC
--- crash; this is called lazily from prefix_SetupMap, idempotently.
+-- crash; this is called lazily from H2AP_SetupMap, idempotently.
 
 local AP_REVERSE_PATCH_FLAG = "_ap_reverse_rivals_patched"
 
@@ -84,7 +84,7 @@ local REVERSE_ENCOUNTER_REWRITE = {
     WorldUpgradeBossDifficultyT4 = { "BossScylla02", "BossEris02" },
 }
 
-function ap_patch_vow_requirements()
+function H2AP_PatchVowRequirements()
     if not ap_reverse_active() then return end
     if WorldUpgradeData == nil then return end
 

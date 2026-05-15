@@ -18,9 +18,9 @@
 
 local _state = nil
 
-local function state_path() return ap_dir() .. "ap_state_" .. ap_world_id() .. ".json" end
+local function state_path() return H2AP_Dir() .. "ap_state_" .. H2AP_WorldId() .. ".json" end
 
-function ap_load_state()
+function H2AP_LoadState()
 	if _state then return _state end
 	_state = {
 		score              = 0,
@@ -39,7 +39,7 @@ function ap_load_state()
 	if not f then return _state end
 	local raw = f:read("*a")
 	f:close()
-	local parsed = json_decode(raw)
+	local parsed = H2AP_JsonDecode(raw)
 	if type(parsed) == "table" then
 		_state = parsed
 		if type(_state.checked_locations) ~= "table" then
@@ -52,24 +52,24 @@ function ap_load_state()
 	return _state
 end
 
-function ap_save_state()
-	local s = ap_load_state()
+function H2AP_SaveState()
+	local s = H2AP_LoadState()
 	local f = io.open(state_path(), "w")
 	if not f then print("[HadesII_AP] ERROR: could not write state") return end
-	f:write(json_val(s))
+	f:write(H2AP_JsonVal(s))
 	f:close()
 end
 
 -- ── Location tracking ─────────────────────────────────────────────────────────
 
-function ap_check_location(name)
-	local state = ap_load_state()
+function H2AP_CheckLocation(name)
+	local state = H2AP_LoadState()
 	for _, existing in ipairs(state.checked_locations) do
 		if existing == name then return end  -- already recorded
 	end
 	table.insert(state.checked_locations, name)
 	print("[HadesII_AP] Location checked: " .. name)
-	ap_notify_sent(name)
-	ap_save_state()
-	ap_flush_outbox()
+	H2AP_NotifySent(name)
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
 end

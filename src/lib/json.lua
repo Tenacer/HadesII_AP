@@ -3,7 +3,7 @@
 
 -- ── JSON encoder ──────────────────────────────────────────────────────────────
 
-function json_val(v)
+function H2AP_JsonVal(v)
 	local t = type(v)
 	if t == "string" then
 		return '"' .. v:gsub('\\', '\\\\'):gsub('"', '\\"'):gsub('\n', '\\n'):gsub('\r', '\\r') .. '"'
@@ -13,12 +13,12 @@ function json_val(v)
 		-- arrays: integer keys 1..n
 		if #v > 0 then
 			local parts = {}
-			for _, item in ipairs(v) do parts[#parts+1] = json_val(item) end
+			for _, item in ipairs(v) do parts[#parts+1] = H2AP_JsonVal(item) end
 			return "[" .. table.concat(parts, ",") .. "]"
 		else
 			local parts = {}
 			for k, val in pairs(v) do
-				parts[#parts+1] = '"' .. tostring(k) .. '":' .. json_val(val)
+				parts[#parts+1] = '"' .. tostring(k) .. '":' .. H2AP_JsonVal(val)
 			end
 			return "{" .. table.concat(parts, ",") .. "}"
 		end
@@ -28,7 +28,7 @@ end
 
 -- ── JSON decoder ──────────────────────────────────────────────────────────────
 
-function json_decode(s)
+function H2AP_JsonDecode(s)
 	if type(s) ~= "string" or #s == 0 then return nil end
 	local pos = 1
 
@@ -113,6 +113,6 @@ function json_decode(s)
 
 	local ok, result = pcall(parse)
 	if ok then return result end
-	print("[HadesII_AP] json_decode error on: " .. s:sub(1, 80))
+	print("[HadesII_AP] H2AP_JsonDecode error on: " .. s:sub(1, 80))
 	return nil
 end

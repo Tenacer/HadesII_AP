@@ -20,7 +20,7 @@ local function detect_ap_dir()
 	return profile .. "\\hadesii_ap\\"
 end
 
-function ap_dir()
+function H2AP_Dir()
 	if not _ap_dir then
 		_ap_dir = detect_ap_dir()
 		print("[HadesII_AP] IPC directory: " .. _ap_dir)
@@ -36,15 +36,15 @@ end
 -- Note: settings are cached per hot-reload session; triggering a hot-reload
 -- (or restarting the game) is required when switching worlds mid-session.
 
-function ap_world_id()
-	local s = ap_load_settings()
+function H2AP_WorldId()
+	local s = H2AP_LoadSettings()
 	return (s and s.world_id) or "default"
 end
 
 -- ── Outbox / inbox ────────────────────────────────────────────────────────────
 
-function ap_flush_outbox(extra)
-	local s = ap_load_state()
+function H2AP_FlushOutbox(extra)
+	local s = H2AP_LoadState()
 	local data = {
 		score             = s.score,
 		checks_sent       = s.checks_sent,
@@ -58,20 +58,20 @@ function ap_flush_outbox(extra)
 	if extra then
 		for k, v in pairs(extra) do data[k] = v end
 	end
-	local fname = "ap_out_" .. ap_world_id() .. ".json"
-	local f = io.open(ap_dir() .. fname, "w")
+	local fname = "ap_out_" .. H2AP_WorldId() .. ".json"
+	local f = io.open(H2AP_Dir() .. fname, "w")
 	if not f then print("[HadesII_AP] ERROR: could not write " .. fname) return end
-	f:write(json_val(data))
+	f:write(H2AP_JsonVal(data))
 	f:close()
 end
 
-function ap_read_inbox()
-	local fname = "ap_in_" .. ap_world_id() .. ".json"
-	local f = io.open(ap_dir() .. fname, "r")
+function H2AP_ReadInbox()
+	local fname = "ap_in_" .. H2AP_WorldId() .. ".json"
+	local f = io.open(H2AP_Dir() .. fname, "r")
 	if not f then return nil end
 	local raw = f:read("*a")
 	f:close()
-	return json_decode(raw)
+	return H2AP_JsonDecode(raw)
 end
 
 -- ── Location items (written by Python client after LocationScouts) ────────────
@@ -80,14 +80,14 @@ end
 
 local _location_items_cache = nil
 
-function ap_read_location_items()
+function H2AP_ReadLocationItems()
 	if _location_items_cache then return _location_items_cache end
-	local fname = "ap_location_items_" .. ap_world_id() .. ".json"
-	local f = io.open(ap_dir() .. fname, "r")
+	local fname = "ap_location_items_" .. H2AP_WorldId() .. ".json"
+	local f = io.open(H2AP_Dir() .. fname, "r")
 	if not f then return nil end
 	local raw = f:read("*a")
 	f:close()
-	local data = json_decode(raw)
+	local data = H2AP_JsonDecode(raw)
 	if type(data) == "table" then
 		_location_items_cache = data
 	end
@@ -96,7 +96,7 @@ end
 
 -- Force the location-items cache to refresh on next read (e.g. after the
 -- Python client writes a new scout response).
-function ap_invalidate_location_items_cache()
+function H2AP_InvalidateLocationItemsCache()
 	_location_items_cache = nil
 end
 
@@ -105,8 +105,8 @@ end
 --   item_name (str), player_slot (int), player_name (str),
 --   is_local (bool), display (str)
 -- See HadesIIClient._write_location_items for the source of truth.
-function ap_get_location_item(name)
-	local data = ap_read_location_items()
+function H2AP_GetLocationItem(name)
+	local data = H2AP_ReadLocationItems()
 	if type(data) ~= "table" then return nil end
 	local entry = data[name]
 	if type(entry) == "table" then return entry end
