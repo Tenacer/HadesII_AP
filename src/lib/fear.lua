@@ -11,7 +11,8 @@
 -- minimal_Fear: vow ranks from slot data are applied as a permanent floor at
 --   game load; the shrine is hidden so levels never change.
 
--- Maps AP item name base (stripped of " Rank N" suffix) → shrine upgrade name.
+-- Maps AP vow item name → shrine upgrade name. One AP item per vow; the pool
+-- holds N copies where N is the starting rank from slot_data.vow_ranks.
 VOW_SHRINE_MAP = {
     ["Vow of Pain"]    = "EnemyDamageShrineUpgrade",
     ["Vow of Grit"]    = "EnemyHealthShrineUpgrade",
@@ -33,10 +34,8 @@ VOW_SHRINE_MAP = {
 }
 
 -- Returns the shrine upgrade name for a vow AP item, or nil if not a vow item.
--- Handles both "Vow of Pain Rank 1" (multi-rank) and "Vow of Shadow" (single-rank).
 function H2AP_GetShrineForVowItem(item_name)
-    local base = item_name:match("^(.+) Rank %d+$") or item_name
-    return VOW_SHRINE_MAP[base]
+    return VOW_SHRINE_MAP[item_name]
 end
 
 -- Sets a shrine upgrade level and updates the cached spend total.
