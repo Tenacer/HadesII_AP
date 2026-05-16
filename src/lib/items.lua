@@ -75,6 +75,11 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave Gigaros (HadesSpearPoints)")
 		return true
 	end
+	if item_name == "Entropy" then
+		AddResource("MixerMythic", 1, _PLUGIN.guid)
+		print("[HadesII_AP] Gave Entropy (MixerMythic)")
+		return true
+	end
 	-- Keepsakes: track the AP-received unlock in our own GameState field so the
 	-- vanilla GiftPresentation flag stays clear. That way GiveGift still calls
 	-- PlayerReceivedGiftPresentation when the player gifts the NPC, letting our
