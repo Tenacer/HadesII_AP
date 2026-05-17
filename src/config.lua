@@ -7,8 +7,10 @@ return {
   -- Score needed to unlock each AP location check
   points_per_location = 10;
 
-  -- Leave empty to auto-detect (recommended).
-  -- Linux/Proton example: "Z:\\home\\yourname\\hadesii_ap\\"
-  -- Windows example:      "C:\\Users\\yourname\\hadesii_ap\\"
+  -- Leave empty to auto-detect (recommended). Default resolves to the OS
+  -- user-data dir: ~/.local/share/HadesII_AP/ on Linux/Proton,
+  -- %LOCALAPPDATA%\HadesII_AP\ on native Windows.
+  -- Linux/Proton override example: "Z:\\home\\yourname\\.local\\share\\HadesII_AP\\"
+  -- Windows override example:      "C:\\Users\\yourname\\AppData\\Local\\HadesII_AP\\"
   ap_path = "";
 }

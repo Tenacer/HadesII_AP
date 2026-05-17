@@ -13,11 +13,15 @@ local function detect_ap_dir()
 	if compat then
 		local linux_home = compat:match("(.-)/%.local/") or compat:match("(.-)/%.steam/")
 		if linux_home then
-			return "Z:" .. linux_home:gsub("/", "\\") .. "\\hadesii_ap\\"
+			return "Z:" .. linux_home:gsub("/", "\\") .. "\\.local\\share\\HadesII_AP\\"
 		end
 	end
+	local local_appdata = os.getenv("LOCALAPPDATA")
+	if local_appdata and local_appdata ~= "" then
+		return local_appdata .. "\\HadesII_AP\\"
+	end
 	local profile = os.getenv("USERPROFILE") or "C:\\Users\\Default"
-	return profile .. "\\hadesii_ap\\"
+	return profile .. "\\AppData\\Local\\HadesII_AP\\"
 end
 
 function H2AP_Dir()

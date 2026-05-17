@@ -6,7 +6,7 @@
 local NOTIFY_DEFAULTS = {
 	delay    = 2.0,
 	fontsize = 13,
-	font     = "UbuntuMonoBold",
+	font     = "NotoSansMono",
 	sound    = "/Leftovers/SFX/AuraOff",
 }
 
