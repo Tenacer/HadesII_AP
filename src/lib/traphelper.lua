@@ -21,6 +21,7 @@ HELPER_ITEMS = {
 }
 
 local function init_lodger()
+	if GameState == nil then return false end
 	GameState.AP_HelperLodger = GameState.AP_HelperLodger or {
 		MaxHealth        = 0,
 		InitialMoney     = 0,
@@ -31,12 +32,13 @@ local function init_lodger()
 		MoneyPending  = 0,
 		HealthPending = 0,
 	}
+	return true
 end
 
 -- ── Trap dispatch ────────────────────────────────────────────────────────────
 
 function H2AP_GiveItemTrap(item_name)
-	init_lodger()
+	if not init_lodger() then return false end
 	if item_name == "Money Punishment" then
 		GameState.AP_TrapQueue.MoneyPending = GameState.AP_TrapQueue.MoneyPending + 1
 	elseif item_name == "Health Punishment" then
@@ -51,7 +53,7 @@ end
 -- ── Helper dispatch ──────────────────────────────────────────────────────────
 
 function H2AP_GiveItemHelper(item_name)
-	init_lodger()
+	if not init_lodger() then return false end
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
 		L.MaxHealth = L.MaxHealth + 1
@@ -74,7 +76,7 @@ end
 -- CurrentRun.Hero if a run is active). Idempotent: MaxHealthApplied tracks
 -- what we've already added so reload / re-call won't double-stack.
 function H2AP_ApplyMaxHealthHelper()
-	init_lodger()
+	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
 	local target = L.MaxHealth * HELPER_MAX_HEALTH_PER
 	local delta  = target - L.MaxHealthApplied
@@ -94,7 +96,7 @@ end
 -- Add the persistent starting-money bonus on top of vanilla starting money.
 -- Called from the StartNewRun override in reload.lua after the base call.
 function H2AP_ApplyInitialMoneyHelper()
-	init_lodger()
+	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
 	if L.InitialMoney <= 0 then return end
 	AddResource("Money", L.InitialMoney * HELPER_INITIAL_MONEY_PER, _PLUGIN.guid)
@@ -102,7 +104,7 @@ end
 
 -- Returns the additive rarity boost (0..1) to apply to every rarity bucket.
 function H2AP_BoonBoostPct()
-	init_lodger()
+	if not init_lodger() then return 0 end
 	return (GameState.AP_HelperLodger.BoonBoost or 0) * HELPER_BOON_BOOST_PER
 end
 
@@ -121,7 +123,7 @@ local function unsafe_to_apply_traps()
 end
 
 function H2AP_ProcessTrapQueue()
-	init_lodger()
+	if not init_lodger() then return end
 	if unsafe_to_apply_traps() then return end
 	local q = GameState.AP_TrapQueue
 
