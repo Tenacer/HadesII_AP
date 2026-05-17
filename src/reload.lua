@@ -123,49 +123,6 @@ function H2AP_ShowBossRewardBanner()
 	end)
 end
 
--- ── Keepsakesanity gifting hook ───────────────────────────────────────────────
-
--- Hook ReceivedGiftPresentation (called in GiveGift before the GiftPresentation
--- check) to send AP location checks in keepsakesanity mode. This fires regardless
--- of whether H2AP_GiveItem already set GiftPresentation, which means we always catch
--- the gifting event and can send the check even if the keepsake was AP-received first.
--- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
--- `function ReceivedGiftPresentation(...)` here would silently no-op (LuaENVY-private env).
-if not _ap_orig_ReceivedGiftPresentation then
-    _ap_orig_ReceivedGiftPresentation = ReceivedGiftPresentation
-end
-local function ap_received_gift_presentation(npc, giftAnimation)
-    _ap_orig_ReceivedGiftPresentation(npc, giftAnimation)
-    if giftAnimation ~= "GiftNPC" then return end
-    local settings = H2AP_LoadSettings()
-    if not (settings and settings.keepsakesanity == 1) then return end
-    local name = GetGenusName and GetGenusName(npc)
-    local giftData = GiftData and name and GiftData[name]
-    if not giftData then return end
-    for _, giftLevelData in ipairs(giftData) do
-        local gift_id = giftLevelData and giftLevelData.Gift
-        if gift_id then
-            local location = KEEPSAKE_LOCATION_FOR_GIFT and KEEPSAKE_LOCATION_FOR_GIFT[gift_id]
-            if location then
-                local state = H2AP_LoadState()
-                local already_sent = false
-                for _, cl in ipairs(state.checked_locations or {}) do
-                    if cl == location then already_sent = true; break end
-                end
-                H2AP_CheckLocation(location)
-                if GameState and GameState.GiftPresentation then
-                    GameState.GiftPresentation[gift_id] = true
-                end
-                if not already_sent then
-                    H2AP_ShowKeepsakeCheckBanner(npc)
-                end
-            end
-        end
-    end
-end
-modutil.mod.Path.Set("ReceivedGiftPresentation", ap_received_gift_presentation)
-print("[HadesII_AP] ReceivedGiftPresentation override installed")
-
 -- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
 
 -- Hint each visible incantation when a cauldron category is displayed (initial

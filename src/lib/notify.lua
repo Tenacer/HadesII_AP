@@ -4,10 +4,14 @@
 -- ── In-game notification log (PrintStack wrapper) ────────────────────────────
 
 local NOTIFY_DEFAULTS = {
-	delay    = 2.0,
+	delay    = 5.0,
 	fontsize = 13,
-	font     = "NotoSansMono",
+	font     = "LatoBold",
 	sound    = "/Leftovers/SFX/AuraOff",
+	-- ModUtil.Hades.PrintStack sets this on the per-row rectangle and the engine
+	-- multiplies it into the text alpha. Keep the default RGB (matches the panel
+	-- backing) but raise alpha from 0.125 → 0.75 so text is readable.
+	bgcol    = { 0.0745, 0.1020, 0.0980, 0.75 },
 }
 
 local COLOR_SENT     = { 0.55, 0.85, 1.00, 1.00 }
@@ -24,7 +28,7 @@ function H2AP_Notify(text, color, delay, sound)
 		text,
 		delay or NOTIFY_DEFAULTS.delay,
 		color,
-		nil,
+		NOTIFY_DEFAULTS.bgcol,
 		NOTIFY_DEFAULTS.fontsize,
 		NOTIFY_DEFAULTS.font,
 		sound or NOTIFY_DEFAULTS.sound)
@@ -45,10 +49,10 @@ function H2AP_NotifyReceived(item_name)
 	end
 end
 
--- Score ticks fire every cleared room — shorter delay, no sound to avoid spam.
+-- Score ticks fire every cleared room — no sound to avoid spam.
 function H2AP_NotifyScore(total_score, delta)
-	H2AP_Notify("+" .. tostring(delta) .. " pts → " .. tostring(total_score),
-		COLOR_SCORE, 1.5, "")
+	H2AP_Notify("+" .. tostring(delta) .. " pts. Total score: " .. tostring(total_score),
+		COLOR_SCORE, nil, "")
 end
 
 function H2AP_NotifyMilestone(checks_sent, max_checks)
