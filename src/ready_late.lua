@@ -14,6 +14,7 @@
 -- before the first SetupMap wrap fires.
 H2AP_PatchIncantationIcons()
 H2AP_PatchIncantationGates()
+H2AP_PatchIncantationCosts()
 -- Flush the outbox immediately so the Python client sees the game is running.
 H2AP_FlushOutbox()
 

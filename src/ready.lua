@@ -42,6 +42,7 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	LoadPackages({ Name = ap_icon_pkg })
 	H2AP_PatchIncantationIcons()
 	H2AP_PatchIncantationGates()
+	H2AP_PatchIncantationCosts()
 	H2AP_SetupMap()
 	if not _polling_started then
 		_polling_started = true

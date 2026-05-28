@@ -70,6 +70,29 @@ function H2AP_PatchIncantationGates()
 	end
 end
 
+-- Rewrite the brewing costs of the two True Ending goal incantations so they
+-- match the per-seed thresholds. Vanilla costs (8 total Z-Sand, 4 V-Lens) would
+-- consume the entire item pool — patching to the threshold leaves the rest
+-- free for Arcana upgrades. Gigaros + Entropy stay at 1× each.
+-- Idempotent via `_ap_cost_patched` sentinel.
+function H2AP_PatchIncantationCosts()
+	if WorldUpgradeData == nil then return end
+	local settings = H2AP_LoadSettings() or {}
+	if settings.true_ending ~= 1 then return end
+	local zsand = tonumber(settings.zodiac_sand_needed) or 4
+	local vlens = tonumber(settings.void_lens_needed) or 2
+	local d = WorldUpgradeData["WorldUpgradeTimeStop"]
+	if d and not d._ap_cost_patched then
+		d.Cost = { MixerIBoss = zsand, MixerMythic = 1 }
+		d._ap_cost_patched = true
+	end
+	local s = WorldUpgradeData["WorldUpgradeStormStop"]
+	if s and not s._ap_cost_patched then
+		s.Cost = { MixerQBoss = vlens, HadesSpearPoints = 1 }
+		s._ap_cost_patched = true
+	end
+end
+
 -- Show the AP logo banner when a keepsake gifting location check fires.
 -- Mirrors PlayerReceivedGiftPresentation's sound/voice/color-grading but
 -- uses the AP logo and gift-style banner animations instead of the vanilla keepsake icon.
