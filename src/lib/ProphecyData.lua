@@ -51,7 +51,10 @@ PROPHECY_LOCATIONS = {
 	["QuestUnlockMoros"]                         = "Harbinger of Doom Check",
 	["QuestPetFrog"]                             = "Familiar Confidant Check",
 	["QuestMeetCyclopsWithOdysseusKeepsake"]     = "Nobody but Nobody Check",
-	["QuestHelpOdysseus"]                        = "Unfinished Business Check",
+	-- QuestHelpOdysseus intentionally excluded: UnlockGameStateRequirements
+	-- requires ReachedTrueEnding (post-goal in TrueEnding mode, unreachable in
+	-- BossDefeats mode). Same precedent as the removed RescueFates stages —
+	-- AP item ID 114 and location ID 2644 retired (do not reuse).
 	["QuestHelpArachne"]                         = "Silk and Spitefulness Check",
 	["QuestHelpNarcissusAndEcho"]                = "Voice and Vanity Check",
 	["QuestHelpDora"]                            = "Haunted by the Past Check",
