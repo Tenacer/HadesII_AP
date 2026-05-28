@@ -15,6 +15,27 @@ local BOSS_DEFAULT_KILLS_NEEDED = {
 	typhon  = 5,
 }
 
+-- Per-biome score weight (room-name prefix → points awarded per regular room).
+-- Linear by depth, per route: each route ramps independently from 1 → 4.
+local BIOME_POINTS = {
+	F = 1,  -- Erebus
+	G = 2,  -- Oceanus
+	H = 3,  -- Mourning Fields
+	I = 4,  -- Tartarus (Chronos route)
+	N = 1,  -- Ephyra
+	O = 2,  -- Thessaly
+	P = 3,  -- Olympus
+	Q = 4,  -- Summit (Typhon route)
+}
+
+-- Cumulative score → number of score checks unlocked.
+-- First 10 checks ramp 1..10 (one extra point per check); checks 11+ cost 10 each.
+local function checks_for_score(s)
+	if s < 1 then return 0 end
+	if s <= 10 then return s end
+	return 10 + math.floor((s - 10) / 10)
+end
+
 local BOSS_LOCATION_BASE_NAME = {
 	chronos = "Chronos Kill Reward",
 	typhon  = "Typhon Kill Reward",
@@ -224,20 +245,20 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	local state    = H2AP_LoadState()
 	local settings = H2AP_LoadSettings()
 
-	local points    = config.points_per_room or 1
-	local threshold = config.points_per_location or 10
+	local biome    = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
+	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
 	local max_checks = settings.score_rewards_amount or 150
 
 	state.score = state.score + points
 	H2AP_NotifyScore(state.score, points)
-	local new_checks = math.min(math.floor(state.score / threshold), max_checks)
+	local new_checks = math.min(checks_for_score(state.score), max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
 		H2AP_NotifyMilestone(state.checks_sent, max_checks)
 	end
 
-	print("[HadesII_AP] +" .. points .. " pts → " .. state.score .. " total")
+	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. ") → " .. state.score .. " total")
 	H2AP_SaveState()
 	H2AP_FlushOutbox()
 end
