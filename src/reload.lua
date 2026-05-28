@@ -381,12 +381,26 @@ function sjson_HelpText(data)
 					-- Back-compat with the older flat string format.
 					display = item_entry
 				end
+				-- Capture vanilla fields before overwriting so the player can still
+				-- see which incantation/prophecy this check is attached to.
+				local vanilla_name = entry.DisplayName
+				local vanilla_desc = entry.Description
+				local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
+				local new_desc = "Archipelago location check for " .. opener .. ".\nComplete this in-game to send a check to the Archipelago server."
+				if vanilla_desc and vanilla_desc ~= "" then
+					new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
+				end
 				entry.DisplayName = display
-				entry.Description = "Archipelago location check. Complete this in-game to send a check to the Archipelago server."
+				entry.Description = new_desc
 			else
 				local base_id = id:match("^(.-)_Flavor$")
 				if base_id and incantation_location_for(base_id) then
-					entry.Description = "What you receive in exchange is determined by the Archipelago multiworld randomizer."
+					local vanilla_flavor = entry.Description
+					local new_desc = "What you receive in exchange is determined by the Archipelago multiworld randomizer."
+					if vanilla_flavor and vanilla_flavor ~= "" then
+						new_desc = new_desc .. "\n\nOriginal: " .. vanilla_flavor
+					end
+					entry.Description = new_desc
 				end
 			end
 		end
