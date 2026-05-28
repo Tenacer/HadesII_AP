@@ -43,7 +43,7 @@ function H2AP_ProcessInbox()
 			if H2AP_GiveItem(item.item_name or "") then
 				state.items_index = idx + 1
 				granted = granted + 1
-				H2AP_NotifyReceived(item.item_name or "")
+				H2AP_NotifyReceived(item)
 			end
 		end
 	end

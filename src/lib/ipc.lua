@@ -107,7 +107,7 @@ end
 -- Returns the structured entry (table) for a scouted location, or nil if
 -- the file isn't on disk yet or the location wasn't scouted. Each entry has
 --   item_name (str), player_slot (int), player_name (str),
---   is_local (bool), display (str)
+--   sender_game (str), is_local (bool), display (str)
 -- See HadesIIClient._write_location_items for the source of truth.
 function H2AP_GetLocationItem(name)
 	local data = H2AP_ReadLocationItems()
