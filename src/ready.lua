@@ -116,6 +116,13 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local ap_location = INCANTATION_LOCATIONS[wu_key]
 	if not ap_location then return base(screen, button) end
 
+	-- Broker is granted for free at start when unlock_broker is on, so it's
+	-- never an AP location. The cauldron won't offer an already-brewed
+	-- incantation, but guard anyway so a stray re-brew runs vanilla, not AP.
+	if settings.unlock_broker == 1 and wu_key == "WorldUpgradeMarket" then
+		return base(screen, button)
+	end
+
 	-- AP-keyed: fire check, then vanilla brew applies the effect.
 	if H2AP_IsApKeyedIncantation(wu_key, settings) then
 		H2AP_CheckLocation(ap_location)
