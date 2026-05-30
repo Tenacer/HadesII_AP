@@ -111,12 +111,16 @@ end
 -- check. This is a different model from the existing cauldronsanity flow,
 -- which intercepts brewing and suppresses the vanilla effect.
 --
--- Two groups are AP-keyed:
---  • Surface-unlock incantations (WorldUpgradeAltRunDoor +
---    WorldUpgradeSurfacePenaltyCure) — gated by `lock_surface_incantations`.
---    Independent of `cauldronsanity`.
---  • Goal incantations (WorldUpgradeTimeStop + WorldUpgradeStormStop) — gated
---    by `true_ending`. Independent of `cauldronsanity`.
+-- Only the surface-unlock incantations (WorldUpgradeAltRunDoor +
+-- WorldUpgradeSurfacePenaltyCure) are AP-keyed — gated by
+-- `lock_surface_incantations`, independent of `cauldronsanity`.
+--
+-- The goal incantations (WorldUpgradeTimeStop + WorldUpgradeStormStop) are NOT
+-- AP-keyed: under true_ending they brew via the vanilla cauldron flow, gated
+-- only by their (patched) ingredient costs — see H2AP_PatchIncantationCosts.
+-- GOAL_INCANTATION_KEYS / H2AP_IsGoalIncantation are kept solely to keep those
+-- two out of the cauldronsanity icon/intercept so they stay vanilla even when
+-- cauldronsanity is on.
 SURFACE_LOCK_INCANTATION_KEYS = {
 	WorldUpgradeAltRunDoor        = true,
 	WorldUpgradeSurfacePenaltyCure = true,
@@ -148,18 +152,12 @@ function H2AP_KeyedIncantations(settings)
 	if settings.lock_surface_incantations == 1 then
 		for key in pairs(SURFACE_LOCK_INCANTATION_KEYS) do out[key] = true end
 	end
-	if settings.true_ending == 1 then
-		for key in pairs(GOAL_INCANTATION_KEYS) do out[key] = true end
-	end
 	return out
 end
 
 function H2AP_IsApKeyedIncantation(wu_key, settings)
 	if H2AP_IsSurfaceLockIncantation(wu_key) then
 		return settings and settings.lock_surface_incantations == 1 or false
-	end
-	if H2AP_IsGoalIncantation(wu_key) then
-		return settings and settings.true_ending == 1 or false
 	end
 	return false
 end
