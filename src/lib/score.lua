@@ -29,11 +29,15 @@ local BIOME_POINTS = {
 }
 
 -- Cumulative score → number of score checks unlocked.
--- First 10 checks ramp 1..10 (one extra point per check); checks 11+ cost 10 each.
+-- Checks 1-10 use triangular thresholds: check n unlocks at score n*(n+1)/2
+-- (check 1=1, 2=3, 3=6, …, 10=55). Checks 11+ cost 10 points each beyond score 55.
+local TRIANGLE_MAX_SCORE = 55  -- 10*11/2
 local function checks_for_score(s)
 	if s < 1 then return 0 end
-	if s <= 10 then return s end
-	return 10 + math.floor((s - 10) / 10)
+	if s <= TRIANGLE_MAX_SCORE then
+		return math.floor((-1 + math.sqrt(1 + 8 * s)) / 2)
+	end
+	return 10 + math.floor((s - TRIANGLE_MAX_SCORE) / 10)
 end
 
 local BOSS_LOCATION_BASE_NAME = {
