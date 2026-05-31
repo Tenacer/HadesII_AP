@@ -223,10 +223,12 @@ end
 modutil.mod.Path.Set("CashOutQuest", ap_cash_out_quest)
 print("[HadesII_AP] CashOutQuest override installed")
 
--- ── Weapon / hidden aspect sanity ────────────────────────────────────────────
+-- ── Weapon / hidden aspect / tool sanity ─────────────────────────────────────
 
--- Suppress the vanilla weapon/aspect unlock when the corresponding sanity option
--- is on. Player still pays cost; AddWorldUpgrade and the equip thread are skipped.
+-- Tools (ToolPickaxe etc.) are sold through this same WeaponShop screen, so they
+-- ride the same interception when toolsanity is on.
+-- Suppress the vanilla weapon/aspect/tool unlock when the corresponding sanity
+-- option is on. Player still pays cost; AddWorldUpgrade and the equip thread are skipped.
 -- H2AP_GiveItem handles the real unlock when the AP item arrives. WorldUpgradesAdded
 -- is set so the slot shows as purchased and can't be re-bought.
 -- Override installed via modutil.mod.Path.Set so the write lands in _G — bare
@@ -244,6 +246,11 @@ local function ap_handle_weapon_shop_purchase(screen, button)
             ap_location = WEAPON_LOCATIONS[item_name]
         elseif settings.hidden_aspectsanity == 1 and HIDDEN_ASPECT_LOCATIONS[item_name] then
             ap_location = HIDDEN_ASPECT_LOCATIONS[item_name]
+        elseif settings.toolsanity == 1 and TOOL_LOCATIONS[item_name] then
+            -- Tools share the WeaponShop screen; item_name is the internal tool key
+            -- (e.g. "ToolPickaxe"). Suppress the vanilla unlock and fire the check;
+            -- H2AP_GiveItem grants the actual tool when the AP item arrives.
+            ap_location = TOOL_LOCATIONS[item_name]
         end
         if ap_location then
             if not button.Free and not HasResources(itemData.Cost) then
@@ -348,9 +355,12 @@ function sjson_HelpText(data)
 	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	local do_fate = settings.fatesanity == 1
+	local do_weapon = settings.weaponsanity == 1
+	local do_tool = settings.toolsanity == 1
+	local do_aspect = settings.hidden_aspectsanity == 1
 	local keyed = H2AP_KeyedIncantations(settings)
 	local has_keyed = next(keyed) ~= nil
-	if not (do_cauldron or do_fate or has_keyed) then return end
+	if not (do_cauldron or do_fate or do_weapon or do_tool or do_aspect or has_keyed) then return end
 
 	local location_items = H2AP_ReadLocationItems() or {}
 
@@ -371,8 +381,15 @@ function sjson_HelpText(data)
 	for _, entry in ipairs(data.Texts) do
 		local id = entry.Id
 		if id then
+			-- WeaponShop labels (weapons / tools / hidden aspects) resolve from
+			-- the HelpText entry whose Id == the item's internal name, which is
+			-- exactly the *_LOCATIONS key — so patching DisplayName here renames
+			-- the shop slot just like incantations.
 			local ap_location = incantation_location_for(id)
 				or (do_fate and PROPHECY_LOCATIONS[id])
+				or (do_weapon and WEAPON_LOCATIONS[id])
+				or (do_tool and TOOL_LOCATIONS[id])
+				or (do_aspect and HIDDEN_ASPECT_LOCATIONS[id])
 			if ap_location then
 				local item_entry = location_items[ap_location]
 				local display = "AP Location Check"

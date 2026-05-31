@@ -95,7 +95,8 @@ function H2AP_GiveItem(item_name)
 	end
 	-- Tools: unlock the tool so HasAccessToTool returns true. WorldUpgradesAdded
 	-- marks the shop slot as already-purchased so the player isn't charged again.
-	-- The location check fires from H2AP_CheckToolUnlocks (called in H2AP_SetupMap).
+	-- Receiving the item only grants the tool; the location check is fired
+	-- separately by the WeaponShop-purchase interception in reload.lua.
 	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
 	if tool then
 		GameState.WeaponsUnlocked[tool]         = true

@@ -75,7 +75,6 @@ function H2AP_SetupMap()
 	H2AP_InitWeaponState()
 	H2AP_ApplyUnlockBroker()
 	H2AP_ProcessInbox()
-	H2AP_CheckToolUnlocks()
 	H2AP_CheckQuestCompletions()
 	H2AP_ProcessTrapQueue()
 end
