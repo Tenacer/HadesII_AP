@@ -31,38 +31,11 @@ end)
 -- end})
 
 -- ── Room / map hooks ─────────────────────────────────────────────────────────
-
--- Runs at the start of every room load: processes the AP inbox (grant queued items).
--- The inbox polling thread is started here on the first SetupMap call because
--- thread() requires SessionMapState to exist, which is only true once a map loads.
-local _polling_started = false
-modutil.mod.Path.Wrap("SetupMap", function(base, ...)
-	-- Reload the package each room (game may evict it) and re-patch icons
-	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
-	LoadPackages({ Name = ap_icon_pkg })
-	H2AP_PatchIncantationIcons()
-	H2AP_PatchIncantationGates()
-	H2AP_PatchIncantationCosts()
-	H2AP_SetupMap()
-	if not _polling_started then
-		_polling_started = true
-		-- Persist=true survives LoadMap/KillNonPersistentThreads so we only need to start once.
-		thread(function()
-			while true do
-				wait(0.5, "AP_Inbox_Poll", true)
-				H2AP_ProcessInbox()
-			end
-		end)
-	end
-	return base(...)
-end)
-
--- Fires when all enemies in a room are dead: score a room clear or a boss kill.
-modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEncounter)
-	local result = base(currentRoom, currentEncounter)
-	H2AP_OnRoomCleared(currentRoom, currentEncounter)
-	return result
-end)
+-- Note: the SetupMap and OnAllEnemiesDead wraps live in ready_late.lua so they
+-- register after on_all_mods_loaded — several other installed mods (DamageMeter,
+-- Cosmetics_API, MelSkin, SharedKeepsakePort, PonyMenu) also hook SetupMap, and
+-- late registration keeps our wrap's position in the chain deterministic
+-- (see ModUtil issue #12). KillHero is moved there too for the same reason.
 
 -- Boss reward dispatcher. Branches on H2AP_BossRewardAction (set in lib/score.lua):
 --   ap_check  → spawn an interactable for the AP item placed at this location
@@ -193,15 +166,7 @@ modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, a
 end)
 
 -- ── Death hook ────────────────────────────────────────────────────────────────
-
--- KillHero is the hero-specific death handler in DeathLoopLogic.lua.
--- Kill() calls it only when victim == CurrentRun.Hero, so this fires exactly
--- once per Melinoë death and not for enemy deaths.
-modutil.mod.Path.Wrap("KillHero", function(base, victim, triggerArgs)
-	local result = base(victim, triggerArgs)
-	H2AP_OnMelinoeDied()
-	return result
-end)
+-- The KillHero wrap lives in ready_late.lua (4 other installed mods also hook it).
 
 -- ── Shrine access block ───────────────────────────────────────────────────────
 
