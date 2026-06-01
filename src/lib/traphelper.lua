@@ -26,7 +26,6 @@ local function init_lodger()
 		MaxHealth        = 0,
 		InitialMoney     = 0,
 		BoonBoost        = 0,
-		MaxHealthApplied = 0,
 	}
 	GameState.AP_TrapQueue = GameState.AP_TrapQueue or {
 		MoneyPending  = 0,
@@ -57,7 +56,16 @@ function H2AP_GiveItemHelper(item_name)
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
 		L.MaxHealth = L.MaxHealth + 1
-		H2AP_ApplyMaxHealthHelper()
+		-- If a run is live, bump the active hero immediately by the per-item
+		-- amount. The full cumulative bonus is re-applied on the fresh hero
+		-- each run by H2AP_ApplyMaxHealthHelper.
+		if CurrentRun and CurrentRun.Hero then
+			CurrentRun.Hero.MaxHealth = (CurrentRun.Hero.MaxHealth or 0) + HELPER_MAX_HEALTH_PER
+			CurrentRun.Hero.Health    = math.min(
+				(CurrentRun.Hero.Health or 0) + HELPER_MAX_HEALTH_PER,
+				CurrentRun.Hero.MaxHealth)
+			if ShowHealthUI then ShowHealthUI() end
+		end
 	elseif item_name == "Initial Money Helper" then
 		L.InitialMoney = L.InitialMoney + 1
 		-- Effect applied at next StartNewRun via H2AP_ApplyInitialMoneyHelper.
@@ -72,25 +80,21 @@ function H2AP_GiveItemHelper(item_name)
 	return true
 end
 
--- Re-apply the cumulative MaxHealth bonus to HeroData.DefaultHero (and to
--- CurrentRun.Hero if a run is active). Idempotent: MaxHealthApplied tracks
--- what we've already added so reload / re-call won't double-stack.
+-- Apply the full cumulative MaxHealth bonus to the freshly-built run hero.
+-- Called from the StartNewRun override AFTER vanilla CreateNewHero, where
+-- CurrentRun.Hero is a clean DeepCopy of HeroData (base 30, no prior bonus),
+-- so we add the whole bonus each run rather than mutating the shared template.
+-- (Hades II has no HeroData.DefaultHero — that was a Hades 1 structure.)
 function H2AP_ApplyMaxHealthHelper()
 	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
-	local target = L.MaxHealth * HELPER_MAX_HEALTH_PER
-	local delta  = target - L.MaxHealthApplied
-	if delta == 0 then return end
-	if HeroData and HeroData.DefaultHero then
-		HeroData.DefaultHero.MaxHealth = (HeroData.DefaultHero.MaxHealth or 0) + delta
-	end
+	local bonus = L.MaxHealth * HELPER_MAX_HEALTH_PER
+	if bonus <= 0 then return end
 	if CurrentRun and CurrentRun.Hero then
-		CurrentRun.Hero.MaxHealth = (CurrentRun.Hero.MaxHealth or 0) + delta
-		CurrentRun.Hero.Health    = math.min(
-			(CurrentRun.Hero.Health or 0) + delta, CurrentRun.Hero.MaxHealth)
+		CurrentRun.Hero.MaxHealth = (CurrentRun.Hero.MaxHealth or 0) + bonus
+		CurrentRun.Hero.Health    = CurrentRun.Hero.MaxHealth
 		if ShowHealthUI then ShowHealthUI() end
 	end
-	L.MaxHealthApplied = target
 end
 
 -- Add the persistent starting-money bonus on top of vanilla starting money.
