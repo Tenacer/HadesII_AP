@@ -314,9 +314,12 @@ end
 modutil.mod.Path.Set("StartNewRun", ap_start_new_run)
 print("[HadesII_AP] StartNewRun override installed")
 
--- GetRarityChances: add an additive percentage to every rarity bucket from
--- the accumulated Boon Boost Helpers. Hot in loot rolls, but Path.Set is
--- just a regular function call (no wrap-machinery overhead).
+-- GetRarityChances: add an additive percentage to the Rare and Epic buckets
+-- only, from the accumulated Boon Boost Helpers. We deliberately leave the
+-- other rarities alone — Duo/Legendary/Heroic carry their own gameplay
+-- balance and Common is the inert fallback. Hot in loot rolls, but Path.Set
+-- is just a regular function call (no wrap-machinery overhead).
+local AP_BOON_BOOST_RARITIES = { "Rare", "Epic" }
 if not _ap_orig_GetRarityChances then
 	_ap_orig_GetRarityChances = GetRarityChances
 end
@@ -324,8 +327,10 @@ local function ap_get_rarity_chances(loot)
 	local rarityChances = _ap_orig_GetRarityChances(loot)
 	local boost = H2AP_BoonBoostPct and H2AP_BoonBoostPct() or 0
 	if boost > 0 and rarityChances then
-		for k, v in pairs(rarityChances) do
-			rarityChances[k] = v + boost
+		for _, rarityName in ipairs(AP_BOON_BOOST_RARITIES) do
+			if rarityChances[rarityName] ~= nil then
+				rarityChances[rarityName] = rarityChances[rarityName] + boost
+			end
 		end
 	end
 	return rarityChances
