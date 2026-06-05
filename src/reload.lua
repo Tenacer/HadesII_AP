@@ -284,7 +284,12 @@ local function ap_handle_weapon_shop_purchase(screen, button)
                 Destroy({ Id = screen.Components["Icon" .. button.Index].Id })
                 screen.Components["Icon" .. button.Index] = nil
             end
-            CloseWeaponShopScreen(screen, button, {})
+            -- Pass the CloseButton (not the purchase button) so
+            -- WeaponShopScreenCloseFinishedPresentation takes the close-button
+            -- branch and pans the camera back to Melinoë. Passing the purchase
+            -- button skips that branch and the camera stays stuck on the shop.
+            -- (Same root cause + fix as the cauldron CloseGhostAdminScreen case.)
+            CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
             H2AP_CheckLocation(ap_location)
             H2AP_ShowBossRewardBanner()
             return
