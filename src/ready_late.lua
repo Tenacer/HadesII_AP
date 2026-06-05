@@ -23,11 +23,29 @@ H2AP_FlushOutbox()
 -- Clear GameStateRequirements from all GiftData gift-level entries so that AP can
 -- trigger keepsake location checks via gifting without needing specific NPC dialogue
 -- to have happened first. Runs after all mods have populated GiftData.
+--
+-- Keepsake gift-levels get a guard instead of an empty requirement: they stay
+-- eligible only until GameState.AP_KeepsakeChecked[gift] is set (the moment the AP
+-- check fires, see ready.lua). After that GiftLogic skips the level, so
+-- PlayerReceivedGiftPresentation is no longer re-called — and the AP banner no longer
+-- re-shows — every time the player gifts that NPC again. The guard deliberately keys
+-- off our own AP_KeepsakeChecked flag, NOT GiftPresentation, so the keepsake stays
+-- "unowned" for bounty/objective/incantation requirements until AP delivers it.
+-- (When keepsakesanity is off, AP_KeepsakeChecked is never set, so the guard always
+-- passes and behaves exactly like the cleared `{}` requirement.)
 for npcName, npcData in pairs(GiftData) do
 	if type(npcData) == "table" then
 		for i = 1, #npcData do
-			if npcData[i] and npcData[i].GameStateRequirements then
-				npcData[i].GameStateRequirements = {}
+			local entry = npcData[i]
+			if entry then
+				local gift = entry.Gift
+				if gift and KEEPSAKE_LOCATION_FOR_GIFT[gift] then
+					entry.GameStateRequirements = {
+						{ PathFalse = { "GameState", "AP_KeepsakeChecked", gift } },
+					}
+				elseif entry.GameStateRequirements then
+					entry.GameStateRequirements = {}
+				end
 			end
 		end
 	end

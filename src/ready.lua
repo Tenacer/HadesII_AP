@@ -127,10 +127,16 @@ end)
 
 -- Intercepts the vanilla keepsake-received presentation when keepsakesanity is on.
 -- GiftLogic.lua sets GiftPresentation[gift]=true and NewKeepsakeItem[gift]=true just
--- before calling us, so we undo those to prevent the vanilla keepsake being granted.
--- We then show our own AP banner (Archipelago logo, gift animations) and send the
--- AP location check. CheckAchievement still runs after we return but is harmless
--- since we cleared GiftPresentation[giftName].
+-- before calling us, so we undo those to prevent the vanilla keepsake being granted —
+-- GiftPresentation is the game's canonical "owns this keepsake" flag (read by
+-- bounty/objective/incantation requirements), so it MUST stay clear until AP delivers
+-- the keepsake item. We then show our own AP banner and send the AP location check.
+--
+-- We also set GameState.AP_KeepsakeChecked[gift]. The matching GiftData guard in
+-- ready_late.lua makes the keepsake gift-level ineligible once that flag is set, so
+-- GiftLogic stops re-calling this presentation on every subsequent gift. Without it,
+-- clearing GiftPresentation made the game think the keepsake was never received and
+-- re-fired the AP banner each time the player gifted the NPC.
 modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, giftName)
 	local settings = H2AP_LoadSettings()
 	if settings and settings.keepsakesanity == 1 then
@@ -138,6 +144,8 @@ modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, gift
 		if location then
 			GameState.GiftPresentation[giftName] = nil
 			GameState.NewKeepsakeItem[giftName]  = nil
+			GameState.AP_KeepsakeChecked = GameState.AP_KeepsakeChecked or {}
+			GameState.AP_KeepsakeChecked[giftName] = true
 			H2AP_ShowKeepsakeCheckBanner(npc)
 			H2AP_CheckLocation(location)
 			return
