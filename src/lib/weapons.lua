@@ -34,13 +34,15 @@ WEAPON_LOCATIONS = {
 }
 
 -- AP item name → game internal weapon name (for H2AP_GiveItem).
+-- Keys must match the bare item names from the apworld's items.csv exactly (no
+-- " Item" suffix — that suffix only exists on the location names).
 WEAPON_ITEM_TO_NAME = {
-	["Staff Weapon Unlock Item"]   = "WeaponStaffSwing",
-	["Daggers Weapon Unlock Item"] = "WeaponDagger",
-	["Torches Weapon Unlock Item"] = "WeaponTorch",
-	["Axe Weapon Unlock Item"]     = "WeaponAxe",
-	["Skull Weapon Unlock Item"]   = "WeaponLob",
-	["Coat Weapon Unlock Item"]    = "WeaponSuit",
+	["Staff Weapon Unlock"]   = "WeaponStaffSwing",
+	["Daggers Weapon Unlock"] = "WeaponDagger",
+	["Torches Weapon Unlock"] = "WeaponTorch",
+	["Axe Weapon Unlock"]     = "WeaponAxe",
+	["Skull Weapon Unlock"]   = "WeaponLob",
+	["Coat Weapon Unlock"]    = "WeaponSuit",
 }
 
 -- Game internal aspect name → AP location name (third aspect entry per weapon
@@ -55,13 +57,15 @@ HIDDEN_ASPECT_LOCATIONS = {
 }
 
 -- AP item name → game internal aspect name (for H2AP_GiveItem).
+-- Keys are the bare apworld item names (items.csv) — these carry neither the
+-- weapon prefix nor the " Item" suffix that the location names use.
 HIDDEN_ASPECT_ITEM_TO_NAME = {
-	["Staff Weapon Anubis Aspect Unlock Item"]    = "StaffRaiseDeadAspect",
-	["Daggers Weapon Morrigan Aspect Unlock Item"] = "DaggerTripleAspect",
-	["Torches Weapon Supay Aspect Unlock Item"]   = "TorchAutofireAspect",
-	["Axe Weapon Nergal Aspect Unlock Item"]      = "AxeRallyAspect",
-	["Skull Weapon Hel Aspect Unlock Item"]       = "LobGunAspect",
-	["Coat Weapon Shiva Aspect Unlock Item"]      = "SuitComboAspect",
+	["Anubis Aspect Unlock"]   = "StaffRaiseDeadAspect",
+	["Morrigan Aspect Unlock"] = "DaggerTripleAspect",
+	["Supay Aspect Unlock"]    = "TorchAutofireAspect",
+	["Nergal Aspect Unlock"]   = "AxeRallyAspect",
+	["Hel Aspect Unlock"]      = "LobGunAspect",
+	["Shiva Aspect Unlock"]    = "SuitComboAspect",
 }
 
 local settings = H2AP_LoadSettings()
