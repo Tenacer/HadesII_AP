@@ -33,6 +33,17 @@ WEAPON_LOCATIONS = {
 	WeaponSuit       = "Coat Weapon Unlock Location",
 }
 
+-- Game internal weapon name → AP "<Weapon> Clear" location name. Fired the
+-- first time a final boss is defeated with that weapon (weapons-goal tracking).
+WEAPON_CLEAR_LOCATIONS = {
+	WeaponStaffSwing = "Staff Weapon Clear",
+	WeaponDagger     = "Daggers Weapon Clear",
+	WeaponTorch      = "Torches Weapon Clear",
+	WeaponAxe        = "Axe Weapon Clear",
+	WeaponLob        = "Skull Weapon Clear",
+	WeaponSuit       = "Coat Weapon Clear",
+}
+
 -- AP item name → game internal weapon name (for H2AP_GiveItem).
 -- Keys must match the bare item names from the apworld's items.csv exactly (no
 -- " Item" suffix — that suffix only exists on the location names).

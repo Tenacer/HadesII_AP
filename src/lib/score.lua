@@ -212,6 +212,39 @@ function H2AP_SpawnApBossReward(ap_location)
 	return reward
 end
 
+-- Evaluate the BossDefeats goal after a boss kill and flag victory if met.
+-- True Ending mode is skipped — its victory fires in death.lua on the natural
+-- credits sequence. The Python client relays state.victory as CLIENT_GOAL
+-- (gated additionally on weapon clears when weaponsanity is on).
+--   combined (boss_defeats_mode 0): chronos + typhon kills >= boss_defeats_needed
+--   separate (boss_defeats_mode 1): chronos >= chronos_kills_needed AND
+--                                    typhon  >= typhon_kills_needed
+function H2AP_CheckBossDefeatsVictory()
+	local settings = H2AP_LoadSettings() or {}
+	if settings.true_ending == true or settings.true_ending == 1 then return end
+
+	local state = H2AP_LoadState()
+	if state.victory then return end
+
+	local chronos = state.chronos_kills or 0
+	local typhon  = state.typhon_kills or 0
+	local mode    = settings.boss_defeats_mode
+	local met
+	if mode == 1 or mode == "separate" then
+		met = chronos >= (settings.chronos_kills_needed or 7)
+			and typhon >= (settings.typhon_kills_needed or 5)
+	else
+		met = (chronos + typhon) >= (settings.boss_defeats_needed or 5)
+	end
+
+	if met then
+		state.victory = true
+		print("[HadesII_AP] BossDefeats goal met — victory!")
+		H2AP_SaveState()
+		H2AP_FlushOutbox()
+	end
+end
+
 function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	if not currentRoom then return end
 
@@ -223,7 +256,27 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 		local state = H2AP_LoadState()
 		local field = boss_key .. "_kills"
 		state[field] = (state[field] or 0) + 1
+
+		-- Record a distinct weapon clear for the weapons goal. The first time a
+		-- given weapon clears a final boss, fire its trackable "<Weapon> Clear"
+		-- AP check (only meaningful — and only a valid location — under weaponsanity).
+		if type(GetEquippedWeapon) == "function" then
+			local weapon = GetEquippedWeapon()
+			if weapon and not state.weapon_clears[weapon] then
+				state.weapon_clears[weapon] = true
+				local settings = H2AP_LoadSettings() or {}
+				local loc = WEAPON_CLEAR_LOCATIONS[weapon]
+				if loc and (settings.weaponsanity == true or settings.weaponsanity == 1) then
+					H2AP_CheckLocation(loc)
+				end
+			end
+		end
+
 		H2AP_SaveState()
+
+		-- BossDefeats goal: flag victory once the configured kill threshold is
+		-- met (no-op under True Ending, which ends via death.lua on the credits).
+		H2AP_CheckBossDefeatsVictory()
 
 		local settings = H2AP_LoadSettings() or {}
 		-- In AP mode, redirect the exit to EndEarlyAccessPresentation (the proper

@@ -15,6 +15,8 @@
 --   vow_received       (table) — shrine_upgrade_name -> count of vow items received (reverse_Fear)
 --   chronos_kills      (int)   — Chronos kills observed (per-kill reward indexing, True Ending)
 --   typhon_kills       (int)   — Typhon  kills observed (per-kill reward indexing, True Ending)
+--   weapon_clears      (table) — set of internal weapon names that have cleared a
+--                                final boss (distinct-clear count for the weapons goal)
 
 local _state = nil
 
@@ -34,6 +36,7 @@ function H2AP_LoadState()
 		vow_received       = {},
 		chronos_kills      = 0,
 		typhon_kills       = 0,
+		weapon_clears      = {},
 	}
 	local f = io.open(state_path(), "r")
 	if not f then return _state end
@@ -48,8 +51,18 @@ function H2AP_LoadState()
 		if type(_state.hinted_locations) ~= "table" then
 			_state.hinted_locations = {}
 		end
+		if type(_state.weapon_clears) ~= "table" then
+			_state.weapon_clears = {}
+		end
 	end
 	return _state
+end
+
+-- Number of distinct weapons that have cleared a final boss (weapons goal).
+function H2AP_DistinctWeaponClears()
+	local n = 0
+	for _ in pairs(H2AP_LoadState().weapon_clears) do n = n + 1 end
+	return n
 end
 
 function H2AP_SaveState()

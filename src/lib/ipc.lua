@@ -57,6 +57,7 @@ function H2AP_FlushOutbox(extra)
 		victory           = s.victory or false,
 		checked_locations = s.checked_locations,
 		hinted_locations  = s.hinted_locations or {},
+		weapon_clears     = H2AP_DistinctWeaponClears(),
 		status            = "playing",
 	}
 	if extra then
