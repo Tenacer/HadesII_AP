@@ -93,42 +93,37 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
 		return true
 	end
-	-- Tools: unlock the tool so HasAccessToTool returns true. WorldUpgradesAdded
-	-- marks the shop slot as already-purchased so the player isn't charged again.
-	-- Receiving the item only grants the tool; the location check is fired
-	-- separately by the WeaponShop-purchase interception in reload.lua.
+	-- Tools: grant usability only. HasAccessToTool reads WeaponsUnlocked, so this
+	-- alone makes the tool work at gathering nodes. We deliberately do NOT touch
+	-- WorldUpgradesAdded — that flag is owned solely by the WeaponShop-purchase
+	-- interception (reload.lua), which uses it to retire the shop slot once the AP
+	-- location check is fired. Keeping them separate means the shop slot survives
+	-- when the item arrives first, so the location check stays reachable either way.
 	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
 	if tool then
 		GameState.WeaponsUnlocked[tool]         = true
-		GameState.WorldUpgrades[tool]           = true
-		GameState.WorldUpgradesAdded[tool]      = true
-		GameState.WorldUpgradesViewed[tool]     = true
-		GameState.WorldUpgradesRevealed[tool]   = true
 		if CurrentRun then
 			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
 			CurrentRun.WeaponsUnlocked[tool] = true
-			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
-			CurrentRun.WorldUpgradesAdded[tool] = true
 		end
 		print("[HadesII_AP] Gave tool: " .. item_name .. " (" .. tool .. ")")
 		return true
 	end
-	-- Weapons: set every flag the game uses for unlock detection. Equipability in
-	-- the Training Grounds applies on the next map setup; if the player is already
-	-- there, ActivateWeaponKit makes the kit useable in the live scene.
+	-- Weapons: grant usability only. IsWeaponUnlocked reads WeaponsUnlocked, which
+	-- drives kit availability (AssignWeaponKits / UpdateWeaponKits). We deliberately
+	-- do NOT touch WorldUpgradesAdded — that flag is owned solely by the WeaponShop-
+	-- purchase interception (reload.lua), which uses it to retire the shop slot once
+	-- the AP location check fires. Keeping them separate means the shop slot survives
+	-- when the item arrives first, so the location check stays reachable either way.
+	-- Equipability applies on the next map setup; if the player is already in the
+	-- Training Grounds, ActivateWeaponKit makes the kit useable in the live scene.
 	local weapon = WEAPON_ITEM_TO_NAME and WEAPON_ITEM_TO_NAME[item_name]
 	if weapon then
 		GameState.WeaponsUnlocked[weapon]        = true
 		GameState.WeaponsTouched[weapon]         = true
-		GameState.WorldUpgrades[weapon]          = true
-		GameState.WorldUpgradesAdded[weapon]     = true
-		GameState.WorldUpgradesViewed[weapon]    = true
-		GameState.WorldUpgradesRevealed[weapon]  = true
 		if CurrentRun then
 			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
 			CurrentRun.WeaponsUnlocked[weapon] = true
-			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
-			CurrentRun.WorldUpgradesAdded[weapon] = true
 		end
 		pcall(function()
 			local kit = GetWeaponKit and GetWeaponKit(weapon)
@@ -142,22 +137,21 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
 		return true
 	end
-	-- Hidden aspects: WeaponsUnlocked drives the aspect equip screen
-	-- (WeaponUpgradeLogic.lua:71); WorldUpgradesAdded drives HasAnyAspectUnlocked
-	-- which gates the kit's aspect-select prompt.
+	-- Hidden aspects: grant usability only. WeaponsUnlocked drives both the per-aspect
+	-- entry in the upgrade screen (WeaponUpgradeLogic.lua:71) and our overridden
+	-- HasAnyAspectUnlocked (reload.lua), which gates the kit's aspect-select prompt.
+	-- We deliberately do NOT touch WorldUpgradesAdded — vanilla HasAnyAspectUnlocked
+	-- reads it, but our override re-points that to WeaponsUnlocked so the shop slot
+	-- (owned by the WeaponShop-purchase interception) survives the item arriving first.
 	local aspect = HIDDEN_ASPECT_ITEM_TO_NAME and HIDDEN_ASPECT_ITEM_TO_NAME[item_name]
 	if aspect then
 		GameState.WeaponsUnlocked[aspect]        = true
-		GameState.WorldUpgrades[aspect]          = true
-		GameState.WorldUpgradesAdded[aspect]     = true
-		GameState.WorldUpgradesViewed[aspect]    = true
-		GameState.WorldUpgradesRevealed[aspect]  = true
 		if CurrentRun then
 			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
 			CurrentRun.WeaponsUnlocked[aspect] = true
-			CurrentRun.WorldUpgradesAdded = CurrentRun.WorldUpgradesAdded or {}
-			CurrentRun.WorldUpgradesAdded[aspect] = true
 		end
+		-- Refresh the kit's aspect prompt if the player is at the kit when it arrives.
+		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
 		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
 		return true
 	end

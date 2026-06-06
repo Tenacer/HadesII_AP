@@ -300,6 +300,28 @@ end
 modutil.mod.Path.Set("HandleWeaponShopPurchase", ap_handle_weapon_shop_purchase)
 print("[HadesII_AP] HandleWeaponShopPurchase override installed")
 
+-- Under hidden_aspectsanity the aspect's WorldUpgradesAdded flag is owned by the
+-- shop location check (set by the purchase interception above), not by ownership.
+-- Vanilla HasAnyAspectUnlocked reads WorldUpgradesAdded, so the kit's aspect-select
+-- prompt would only light after the *check* fires, not after the AP aspect *item*
+-- arrives. Re-point it at WeaponsUnlocked — the same flag the per-aspect list uses
+-- (WeaponUpgradeLogic.lua:71), and the one H2AP_GiveItem sets — so the prompt tracks
+-- the item and stays fully decoupled from the shop slot. Reading WeaponsUnlocked is
+-- vanilla-faithful (vanilla sets it too, else :71 could never show the aspect).
+-- Path.Set (not bare def / Path.Wrap) per the LuaENVY / App.Reset constraints.
+if (H2AP_LoadSettings() or {}).hidden_aspectsanity == 1 then
+    local function ap_has_any_aspect_unlocked(weaponName)
+        for traitName, traitData in pairs(TraitSetData.Aspects) do
+            if traitData.RequiredWeapon == weaponName and GameState.WeaponsUnlocked[traitName] then
+                return true
+            end
+        end
+        return false
+    end
+    modutil.mod.Path.Set("HasAnyAspectUnlocked", ap_has_any_aspect_unlocked)
+    print("[HadesII_AP] HasAnyAspectUnlocked override installed")
+end
+
 -- ── Trap & Helper hooks ─────────────────────────────────────────────────────
 
 -- StartNewRun: apply persistent run-start helpers after vanilla finishes.
@@ -354,23 +376,45 @@ function sjson_ShellText(data)
 	end
 end
 
+-- Shared: rewrite a text entry's DisplayName/Description to advertise the AP item
+-- placed at `ap_location` (scouted into ap_location_items.json), falling back to a
+-- generic "AP Location Check" before LocationScouts has run. Preserves the vanilla
+-- name/description so the player still sees what the check is attached to
+-- (per feedback_ap_helptext_preserve_vanilla). Used by both the HelpText hook
+-- (incantations / prophecies) and the TraitText hook (weapons / tools / aspects).
+function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
+	local item_entry = location_items[ap_location]
+	local display = "AP Location Check"
+	if type(item_entry) == "table" then
+		display = item_entry.display or item_entry.item_name or display
+	elseif type(item_entry) == "string" then
+		-- Back-compat with the older flat string format.
+		display = item_entry
+	end
+	local vanilla_name = entry.DisplayName
+	local vanilla_desc = entry.Description
+	local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
+	local new_desc = "Archipelago location check for " .. opener .. ".\nComplete this in-game to send a check to the Archipelago server."
+	if vanilla_desc and vanilla_desc ~= "" then
+		new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
+	end
+	entry.DisplayName = display
+	entry.Description = new_desc
+end
+
 function sjson_HelpText(data)
 	-- Inject the "AP Check Sent" banner title used by the cauldron hook.
 	data.Texts[#data.Texts + 1] = { Id = "APCheckSent", DisplayName = "AP Check Sent" }
 
 	-- Replace incantation / Fated List Quest entries with AP info when their
-	-- respective sanity option is on. DisplayName comes from ap_location_items.json
-	-- (written by the Python client after LocationScouts); falls back to a generic
-	-- "AP Location Check" if the file isn't there yet.
+	-- respective sanity option is on. Weapon/tool/aspect labels live in
+	-- TraitText.en.sjson, NOT here, so those are handled by sjson_TraitText.
 	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	local do_fate = settings.fatesanity == 1
-	local do_weapon = settings.weaponsanity == 1
-	local do_tool = settings.toolsanity == 1
-	local do_aspect = settings.hidden_aspectsanity == 1
 	local keyed = H2AP_KeyedIncantations(settings)
 	local has_keyed = next(keyed) ~= nil
-	if not (do_cauldron or do_fate or do_weapon or do_tool or do_aspect or has_keyed) then return end
+	if not (do_cauldron or do_fate or has_keyed) then return end
 
 	local location_items = H2AP_ReadLocationItems() or {}
 
@@ -391,35 +435,10 @@ function sjson_HelpText(data)
 	for _, entry in ipairs(data.Texts) do
 		local id = entry.Id
 		if id then
-			-- WeaponShop labels (weapons / tools / hidden aspects) resolve from
-			-- the HelpText entry whose Id == the item's internal name, which is
-			-- exactly the *_LOCATIONS key — so patching DisplayName here renames
-			-- the shop slot just like incantations.
 			local ap_location = incantation_location_for(id)
 				or (do_fate and PROPHECY_LOCATIONS[id])
-				or (do_weapon and WEAPON_LOCATIONS[id])
-				or (do_tool and TOOL_LOCATIONS[id])
-				or (do_aspect and HIDDEN_ASPECT_LOCATIONS[id])
 			if ap_location then
-				local item_entry = location_items[ap_location]
-				local display = "AP Location Check"
-				if type(item_entry) == "table" then
-					display = item_entry.display or item_entry.item_name or display
-				elseif type(item_entry) == "string" then
-					-- Back-compat with the older flat string format.
-					display = item_entry
-				end
-				-- Capture vanilla fields before overwriting so the player can still
-				-- see which incantation/prophecy this check is attached to.
-				local vanilla_name = entry.DisplayName
-				local vanilla_desc = entry.Description
-				local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
-				local new_desc = "Archipelago location check for " .. opener .. ".\nComplete this in-game to send a check to the Archipelago server."
-				if vanilla_desc and vanilla_desc ~= "" then
-					new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
-				end
-				entry.DisplayName = display
-				entry.Description = new_desc
+				H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 			else
 				local base_id = id:match("^(.-)_Flavor$")
 				if base_id and incantation_location_for(base_id) then
@@ -430,6 +449,32 @@ function sjson_HelpText(data)
 					end
 					entry.Description = new_desc
 				end
+			end
+		end
+	end
+end
+
+-- WeaponShop slot labels for weapons / tools / hidden aspects. Their DisplayNames
+-- live in TraitText.en.sjson (the shop renders `item.HelpTextId or item.Name` as a
+-- text Id via auto-lookup, and these entries' Ids equal their internal names — the
+-- *_LOCATIONS keys). HelpText.en.sjson has no such entries, which is why these must
+-- be patched here rather than in sjson_HelpText.
+function sjson_TraitText(data)
+	local settings = H2AP_LoadSettings() or {}
+	local do_weapon = settings.weaponsanity == 1
+	local do_tool = settings.toolsanity == 1
+	local do_aspect = settings.hidden_aspectsanity == 1
+	if not (do_weapon or do_tool or do_aspect) then return end
+
+	local location_items = H2AP_ReadLocationItems() or {}
+	for _, entry in ipairs(data.Texts) do
+		local id = entry.Id
+		if id then
+			local ap_location = (do_weapon and WEAPON_LOCATIONS[id])
+				or (do_tool and TOOL_LOCATIONS[id])
+				or (do_aspect and HIDDEN_ASPECT_LOCATIONS[id])
+			if ap_location then
+				H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 			end
 		end
 	end

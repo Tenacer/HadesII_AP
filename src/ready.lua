@@ -23,6 +23,12 @@ sjson.hook(helpfile, function(data)
 	return sjson_HelpText(data)
 end)
 
+-- Weapon / tool / hidden-aspect shop labels live in TraitText, not HelpText.
+local traitfile = rom.path.combine(rom.paths.Content, 'Game/Text/en/TraitText.en.sjson')
+sjson.hook(traitfile, function(data)
+	return sjson_TraitText(data)
+end)
+
 -- ── Debug keybind ─────────────────────────────────────────────────────────────
 
 -- Press the Gift button to receive a test Ash pack (verifies IPC and AddResource).
