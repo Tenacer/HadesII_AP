@@ -93,6 +93,18 @@ modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEnc
 	return result
 end)
 
+-- Arachne cocoon rooms never call OnAllEnemiesDead: their encounter event set is
+-- { BeginArachneEncounter, WaitForArachneRewardFound } (see EncounterSets.lua),
+-- ending when the reward cocoon's death fires the "ArachneRewardFound" notify that
+-- WaitForArachneRewardFound is blocked on — there's no CheckForAllEnemiesDead in the
+-- chain. So we score these rooms here, once WaitForArachneRewardFound unblocks (the
+-- room is cleared). No double-count risk since OnAllEnemiesDead never runs for them.
+modutil.mod.Path.Wrap("WaitForArachneRewardFound", function(base, encounter)
+	local result = base(encounter)
+	H2AP_OnRoomCleared(CurrentRun and CurrentRun.CurrentRoom, encounter)
+	return result
+end)
+
 -- KillHero is the hero-specific death handler in DeathLoopLogic.lua.
 -- Kill() calls it only when victim == CurrentRun.Hero, so this fires exactly
 -- once per Melinoë death and not for enemy deaths.
