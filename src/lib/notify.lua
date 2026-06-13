@@ -44,28 +44,70 @@ local NOTIFY_MAX     = 12
 local NOTIFY_BASE_X  = 420
 local NOTIFY_BASE_DY = 220   -- pixels above the screen bottom for slot 0
 
--- slot index (1..NOTIFY_MAX) → true while occupied
+-- slot index (1..NOTIFY_MAX) → deadline (a _worldTime value) while occupied, nil
+-- when free.
+--
+-- IMPORTANT: a toast runs inside a non-persistent thread() (no Persist flag), and
+-- Hades' KillNonPersistentThreads() (Main.lua) runs on every map/room load, so it
+-- kills any toast parked in wait() mid-display. A killed thread never reaches its
+-- own slot-release line, so if a slot were a plain boolean it would leak one
+-- transition at a time until all NOTIFY_MAX slots are permanently "busy" and no
+-- new toast can ever appear (the multi-hour "messages stop" bug). To make slots
+-- self-healing we store a DEADLINE per slot and reclaim any slot whose deadline
+-- has passed, regardless of whether its thread survived. The engine tears down our
+-- screen components on map load, so a killed thread leaves no visible orphan — only
+-- the slot bookkeeping needed recovering.
 local notify_slots = {}
 
-local function notify_claim_slot()
+-- FIFO queue of toasts waiting for a free slot, drained as slots free. Bounded so
+-- a runaway sender can't grow it without limit; on overflow we drop the OLDEST
+-- pending toast (the newest traffic is the most useful).
+local notify_pending = {}
+local NOTIFY_PENDING_MAX = 128
+local NOTIFY_RECLAIM_GRACE = 1.0   -- secs past a toast's lifetime before forced reclaim
+
+local function notify_now()
+	return _worldTime or 0
+end
+
+-- Free any slot whose deadline has elapsed. This is what recovers slots whose
+-- toast thread was killed by a map load before it could release itself.
+local function notify_reclaim()
+	local now = notify_now()
 	for i = 1, NOTIFY_MAX do
-		if not notify_slots[i] then
-			notify_slots[i] = true
+		local deadline = notify_slots[i]
+		if deadline ~= nil and now >= deadline then
+			notify_slots[i] = nil
+		end
+	end
+end
+
+-- Claim a free slot for a toast of the given lifetime, reclaiming expired slots
+-- first. The deadline is the lifetime plus a grace margin so a live thread will
+-- normally release its slot on completion before the forced reclaim fires.
+local function notify_claim_slot(lifetime)
+	notify_reclaim()
+	for i = 1, NOTIFY_MAX do
+		if notify_slots[i] == nil then
+			notify_slots[i] = notify_now() + lifetime + NOTIFY_RECLAIM_GRACE
 			return i
 		end
 	end
 	return nil
 end
 
--- One self-contained toast: create → fade in → wait → fade out → Destroy.
--- Runs entirely inside a pcall'd thread; failure leaves no dangling id because
--- the only id we touch is the one we just created.
-local function notify_spawn(text, color, delay, sound, bgcol, fontsize, font)
-	local slot = notify_claim_slot()
-	if slot == nil then return end  -- screen full; drop (rare; print() is the log)
+-- Forward declaration: a finishing toast pumps the queue, and the pump starts
+-- toasts, so the two reference each other.
+local notify_pump
 
+-- One self-contained toast in a claimed slot: create → fade in → wait → fade out
+-- → Destroy. Runs entirely inside a pcall'd thread; failure leaves no dangling id
+-- because the only id we touch is the one we just created. On normal exit it frees
+-- its slot early and pumps the queue; if the thread is instead killed on a map
+-- load, the slot is recovered later by its deadline (see notify_reclaim).
+local function notify_start(slot, t)
 	thread(function()
-		local ok = pcall(function()
+		pcall(function()
 			local cx = ScreenCenterX or 480
 			local cy = ScreenCenterY or 270
 			local x  = NOTIFY_BASE_X
@@ -75,25 +117,50 @@ local function notify_spawn(text, color, delay, sound, bgcol, fontsize, font)
 			local id = comp.Id
 			SetScaleX({ Id = id, Fraction = 10 / 6 })
 			SetScaleY({ Id = id, Fraction = 0.1 })
-			SetColor({ Id = id, Color = bgcol })
+			SetColor({ Id = id, Color = t.bgcol })
 			CreateTextBox({
-				Id = id, Text = text, FontSize = fontsize, OffsetX = 0, OffsetY = 0,
-				Color = color, Font = font, Justification = "Left",
+				Id = id, Text = t.text, FontSize = t.fontsize, OffsetX = 0, OffsetY = 0,
+				Color = t.color, Font = t.font, Justification = "Left",
 			})
 			SetAlpha({ Id = id, Fraction = 0 })
-			if sound and sound ~= "" then PlaySound({ Name = sound }) end
+			if t.sound and t.sound ~= "" then PlaySound({ Name = t.sound }) end
 			SetAlpha({ Id = id, Fraction = 1, Duration = 0.12 })
-			wait(delay)
+			wait(t.delay)
 			SetAlpha({ Id = id, Fraction = 0, Duration = 0.33 })
 			wait(0.33)
 			Destroy({ Ids = { id } })
 		end)
-		-- Always release the slot, even if presentation failed partway.
+		-- Always release the slot, even if presentation failed partway, then let
+		-- the next queued toast (if any) claim it.
 		notify_slots[slot] = nil
-		if not ok then
-			-- nothing else to clean up: any created id was the only thing touched
-		end
+		notify_pump()
 	end)
+end
+
+-- Drain the pending queue into any free slots.
+notify_pump = function()
+	while #notify_pending > 0 do
+		local t = notify_pending[1]
+		-- Lifetime mirrors the thread body: fade-in + hold + fade-out.
+		local lifetime = 0.12 + (t.delay or 0) + 0.33
+		local slot = notify_claim_slot(lifetime)
+		if slot == nil then return end  -- all slots busy; wait for one to free
+		table.remove(notify_pending, 1)
+		notify_start(slot, t)
+	end
+end
+
+-- Enqueue a toast and immediately try to display it. Replaces the old
+-- drop-on-full behaviour.
+local function notify_spawn(text, color, delay, sound, bgcol, fontsize, font)
+	if #notify_pending >= NOTIFY_PENDING_MAX then
+		table.remove(notify_pending, 1)  -- bound the queue; shed the oldest
+	end
+	notify_pending[#notify_pending + 1] = {
+		text = text, color = color, delay = delay, sound = sound,
+		bgcol = bgcol, fontsize = fontsize, font = font,
+	}
+	notify_pump()
 end
 
 -- pcall'd at the boundary too, so a notification can never break a caller.
