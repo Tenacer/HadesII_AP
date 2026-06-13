@@ -114,3 +114,102 @@ modutil.mod.Path.Wrap("KillHero", function(base, victim, triggerArgs)
 	return result
 end)
 
+-- Weapon / hidden aspect / tool sanity: suppress the vanilla weapon/aspect/tool
+-- unlock when the corresponding sanity option is on. Player still pays cost;
+-- AddWorldUpgrade and the equip thread are skipped. H2AP_GiveItem handles the real
+-- unlock when the AP item arrives. WorldUpgradesAdded is set so the slot shows as
+-- purchased and can't be re-bought. Tools (ToolPickaxe etc.) sell through this same
+-- WeaponShop screen, so they ride the same interception when toolsanity is on.
+-- Contested: BountyAPI / Zagreus_Journey also touch the shop, so this registers late.
+modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
+	local settings = H2AP_LoadSettings()
+	local itemData = button and button.Data
+	if settings and itemData then
+		local item_name = itemData.Name
+		local ap_location = nil
+		if settings.weaponsanity == 1 and WEAPON_LOCATIONS[item_name] then
+			ap_location = WEAPON_LOCATIONS[item_name]
+		elseif settings.hidden_aspectsanity == 1 and HIDDEN_ASPECT_LOCATIONS[item_name] then
+			ap_location = HIDDEN_ASPECT_LOCATIONS[item_name]
+		elseif settings.toolsanity == 1 and TOOL_LOCATIONS[item_name] then
+			-- Tools share the WeaponShop screen; item_name is the internal tool key
+			-- (e.g. "ToolPickaxe"). Suppress the vanilla unlock and fire the check;
+			-- H2AP_GiveItem grants the actual tool when the AP item arrives.
+			ap_location = TOOL_LOCATIONS[item_name]
+		end
+		if ap_location then
+			if not button.Free and not HasResources(itemData.Cost) then
+				ScreenCantAffordPresentation(screen, button)
+				return
+			end
+			if not IsEmpty(itemData.Cost) ~= nil and itemData.PurchaseRequirements ~= nil
+				and not IsGameStateEligible(itemData.PurchaseRequirements) then
+				CantPurchasePresentation(screen.Components["PurchaseButton" .. button.Index])
+				return
+			end
+			for resourceName, resourceCost in pairs(itemData.Cost) do
+				SpendResource(resourceName, resourceCost, metaUpgradeName, {
+					TargetId = screen.Components["ResourceIconBacking" .. resourceName].Id,
+					UseScreenLocation = true,
+					TextOffsetY = 11, TextAnchorOffsetY = -50,
+					HoldDuration = 0, FadeOutDuration = 0.2,
+					SkipQuestStatusCheck = true,
+				})
+			end
+			WeaponShopItemPurchasedPresentation(button, itemData)
+			GameState.WorldUpgradesAdded[item_name] = true
+			if CurrentRun then
+				CurrentRun.WorldUpgradesAdded[item_name] = true
+			end
+			RemoveStoreItemPin(item_name, { Purchase = true })
+			CreateAnimation({ Name = "ContractorSlotPurchase", DestinationId = screen.Components["PurchaseButton" .. button.Index].Id, OffsetX = 0 })
+			Destroy({ Id = screen.Components["PurchaseButton" .. button.Index].Id })
+			screen.Components["PurchaseButton" .. button.Index] = nil
+			if screen.Components["Icon" .. button.Index] ~= nil then
+				Destroy({ Id = screen.Components["Icon" .. button.Index].Id })
+				screen.Components["Icon" .. button.Index] = nil
+			end
+			-- Pass the CloseButton (not the purchase button) so
+			-- WeaponShopScreenCloseFinishedPresentation takes the close-button
+			-- branch and pans the camera back to Melinoë. Passing the purchase
+			-- button skips that branch and the camera stays stuck on the shop.
+			-- (Same root cause + fix as the cauldron CloseGhostAdminScreen case.)
+			CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
+			H2AP_CheckLocation(ap_location)
+			H2AP_ShowBossRewardBanner()
+			return
+		end
+	end
+	return base(screen, button)
+end)
+
+-- StartNewRun: apply persistent run-start helpers after vanilla finishes.
+--   • Initial Money helper: extra Money on top of CalculateStartingMoney
+--   • Max Health helper: re-sync the cumulative bonus onto the fresh hero
+-- Contested — MelSkin, Zagreus_Journey and BountyAPI all wrap StartNewRun — so
+-- this registers in ready_late for deterministic chain order.
+modutil.mod.Path.Wrap("StartNewRun", function(base, prevRun, args)
+	local result = base(prevRun, args)
+	pcall(H2AP_ApplyMaxHealthHelper)
+	pcall(H2AP_ApplyInitialMoneyHelper)
+	return result
+end)
+
+-- GetRarityChances: add an additive percentage to the Rare and Epic buckets only,
+-- from the accumulated Boon Boost Helpers. We deliberately leave the other rarities
+-- alone — Duo/Legendary/Heroic carry their own gameplay balance and Common is the
+-- inert fallback. Contested by boon-rarity mods, so registered late.
+local AP_BOON_BOOST_RARITIES = { "Rare", "Epic" }
+modutil.mod.Path.Wrap("GetRarityChances", function(base, loot)
+	local rarityChances = base(loot)
+	local boost = H2AP_BoonBoostPct and H2AP_BoonBoostPct() or 0
+	if boost > 0 and rarityChances then
+		for _, rarityName in ipairs(AP_BOON_BOOST_RARITIES) do
+			if rarityChances[rarityName] ~= nil then
+				rarityChances[rarityName] = rarityChances[rarityName] + boost
+			end
+		end
+	end
+	return rarityChances
+end)
+
