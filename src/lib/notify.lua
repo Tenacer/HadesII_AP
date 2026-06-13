@@ -21,7 +21,7 @@
 
 local NOTIFY_DEFAULTS = {
 	delay    = 5.0,
-	fontsize = 13,
+	fontsize = 15,  -- fallback only; the live value is config.notify_font_size
 	font     = "LatoBold",
 	sound    = "/Leftovers/SFX/AuraOff",
 	-- Per-toast backing rectangle colour. RGB matches the panel backing; alpha
@@ -173,7 +173,7 @@ function H2AP_Notify(text, color, delay, sound)
 		delay or NOTIFY_DEFAULTS.delay,
 		sound or NOTIFY_DEFAULTS.sound,
 		NOTIFY_DEFAULTS.bgcol,
-		NOTIFY_DEFAULTS.fontsize,
+		(config and config.notify_font_size) or NOTIFY_DEFAULTS.fontsize,
 		NOTIFY_DEFAULTS.font)
 end
 
