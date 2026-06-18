@@ -161,3 +161,31 @@ function H2AP_IsApKeyedIncantation(wu_key, settings)
 	end
 	return false
 end
+
+-- True Ending ordering gate: keep Dissolution of Time (WorldUpgradeTimeStop)
+-- un-brewable in the cauldron until the player has genuinely defeated Typhon with
+-- Disintegration of Monstrosity active. Vanilla enforced this implicitly — Time
+-- Stop's recipe needs Entropy, which only drops from that kill — but the AP mod
+-- hands Entropy out as a free item (items.lua) and fakes
+-- GameState.TyphonDefeatedWithStormStop (story.lua), so the implicit gate is gone.
+-- We re-add it explicitly, keyed on AP_TyphonKilledWithStormStop, which is set
+-- ONLY on the real in-game kill (score.lua's H2AP_OnRoomCleared) and is never
+-- touched by the Entropy grant.
+--
+-- Installed once at ready_late startup — GameStateRequirements survive App.Reset
+-- (unlike the Icon fields that force the other incantation patches to re-run in
+-- the SetupMap wrap), so this deliberately does NOT ride that per-room path.
+-- Idempotent via the `_ap_te_gate_patched` sentinel regardless.
+function H2AP_PatchGoalIncantationGate()
+	if WorldUpgradeData == nil then return end
+	local settings = H2AP_LoadSettings() or {}
+	if settings.true_ending ~= 1 then return end
+	local d = WorldUpgradeData["WorldUpgradeTimeStop"]
+	if d and not d._ap_te_gate_patched then
+		d.GameStateRequirements = d.GameStateRequirements or {}
+		table.insert(d.GameStateRequirements, {
+			PathTrue = { "GameState", "AP_TyphonKilledWithStormStop" },
+		})
+		d._ap_te_gate_patched = true
+	end
+end

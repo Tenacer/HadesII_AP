@@ -257,6 +257,19 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 		local field = boss_key .. "_kills"
 		state[field] = (state[field] or 0) + 1
 
+		-- True Ending ordering gate: record an un-fakeable "Typhon beaten with
+		-- Storm Stop" flag the moment it genuinely happens in-game. Mirrors the
+		-- vanilla CheckTyphonReward condition (PresentationBiomeQ.lua). We can't
+		-- reuse GameState.TyphonDefeatedWithStormStop here because the Entropy AP
+		-- grant fakes it (story.lua) — this separate flag is what gates Dissolution
+		-- of Time brewing (see H2AP_PatchGoalIncantationGate), so the player can't
+		-- cast it before brewing Disintegration AND actually defeating Typhon.
+		if boss_key == "typhon"
+				and GameState and GameState.WorldUpgradesAdded
+				and GameState.WorldUpgradesAdded.WorldUpgradeStormStop then
+			GameState.AP_TyphonKilledWithStormStop = true
+		end
+
 		-- Record a distinct weapon clear for the weapons goal. The first time a
 		-- given weapon clears a final boss, fire its trackable "<Weapon> Clear"
 		-- AP check (only meaningful — and only a valid location — under weaponsanity).
