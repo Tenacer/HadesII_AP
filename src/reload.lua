@@ -1,26 +1,12 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
-import 'lib/json.lua'
-import 'lib/ipc.lua'
-import 'lib/settings.lua'
-import 'lib/state.lua'
-import 'lib/IncantationData.lua'
-import 'lib/ProphecyData.lua'
-import 'lib/hints.lua'
-import 'lib/ItemData.lua'
-import 'lib/notify.lua'
-import 'lib/story.lua'
-import 'lib/fear.lua'
-import 'lib/rivals.lua'
-import 'lib/tools.lua'
-import 'lib/traphelper.lua'
-import 'lib/broker.lua'
-import 'lib/items.lua'
-import 'lib/score.lua'
-import 'lib/death.lua'
-import 'lib/inbox.lua'
-import 'lib/weapons.lua'
+-- Library modules are imported from ready.lua / ready_late.lua, not here:
+-- importing from reload.lua re-runs the file on every hot-reload, which is
+-- wasted work for pure-definition modules and unsafe for the install-type ones.
+-- What remains in this file is intentionally hot-reloadable: the AP-icon /
+-- text-label helpers and the SJSON hook handlers, so their cosmetic logic can be
+-- tweaked at runtime without restarting the game.
 
 -- ── AP icon ───────────────────────────────────────────────────────────────────
 

@@ -1,8 +1,34 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- Hooks set up once at startup. Functions called here are defined in reload.lua
--- so that logic changes can be hot-reloaded without restarting the game.
+-- Hooks set up once at startup. The AP-icon and SJSON-label helpers they call
+-- are still defined in reload.lua so those (text/icon) logic tweaks can be
+-- hot-reloaded; the library modules below are pure definitions, so they are
+-- imported here (loaded once, survive App.Reset) rather than from reload.lua,
+-- where they would needlessly re-run on every hot-reload. The two library files
+-- with import-time side effects (lib/rivals.lua, lib/weapons.lua) are imported
+-- from ready_late.lua so their installs run exactly once.
+
+-- ── Library modules (pure definitions) ────────────────────────────────────────
+
+import 'lib/json.lua'
+import 'lib/ipc.lua'
+import 'lib/settings.lua'
+import 'lib/state.lua'
+import 'lib/IncantationData.lua'
+import 'lib/ProphecyData.lua'
+import 'lib/hints.lua'
+import 'lib/ItemData.lua'
+import 'lib/notify.lua'
+import 'lib/story.lua'
+import 'lib/fear.lua'
+import 'lib/tools.lua'
+import 'lib/traphelper.lua'
+import 'lib/broker.lua'
+import 'lib/items.lua'
+import 'lib/score.lua'
+import 'lib/death.lua'
+import 'lib/inbox.lua'
 
 -- ── AP icon package ──────────────────────────────────────────────────────────
 

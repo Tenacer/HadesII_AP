@@ -7,6 +7,19 @@
 -- 	so you will most likely want to have it reference
 --	values and functions later defined in `reload_late.lua`.
 
+-- ── Library modules with import-time side effects ─────────────────────────────
+-- These two modules do install-type work at import time that must run exactly
+-- once: rivals.lua installs an IsBossDifficultyShrineUpgradeActive override via
+-- modutil.mod.Path.Set (re-running a Path.Set from reload.lua is the crash
+-- pattern in feedback_modutil_wrap_crash), and weapons.lua redefines the global
+-- CreateNewHero and writes HeroData.DefaultWeapon. Importing them here (on_ready_late,
+-- not re-run on hot-reload) keeps that work once-only. Tradeoff: their function
+-- bodies can no longer be hot-edited mid-session — a full restart is needed.
+-- All their consumers resolve at call time (gameplay), well after this import,
+-- and after the SJSON text reads that reference WEAPON_LOCATIONS / HIDDEN_ASPECT_LOCATIONS.
+import 'lib/rivals.lua'
+import 'lib/weapons.lua'
+
 -- ── Initial startup calls ────────────────────────────────────────────────────
 
 -- These need reload.lua (imported in on_reload before on_ready_late fires).
