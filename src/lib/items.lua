@@ -93,6 +93,24 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
 		return true
 	end
+	-- Familiars: grant the companion. FamiliarsUnlocked is the canonical "owns this
+	-- familiar" flag everything (kit / traits / codex) keys off, so setting it is the
+	-- whole unlock. We also record AP_FamiliarReceived so the recruit wrap (ready.lua)
+	-- knows not to undo FamiliarsUnlocked when the player later recruits the wild
+	-- familiar for its location check (the item-first case).
+	local familiar = FAMILIAR_ITEM_TO_NAME and FAMILIAR_ITEM_TO_NAME[item_name]
+	if familiar then
+		GameState.AP_FamiliarReceived = GameState.AP_FamiliarReceived or {}
+		GameState.AP_FamiliarReceived[familiar] = true
+		GameState.FamiliarsUnlocked = GameState.FamiliarsUnlocked or {}
+		GameState.FamiliarsUnlocked[familiar] = true
+		if CurrentRun then
+			CurrentRun.FamiliarsUnlocked = CurrentRun.FamiliarsUnlocked or {}
+			CurrentRun.FamiliarsUnlocked[familiar] = true
+		end
+		print("[HadesII_AP] Gave familiar: " .. item_name .. " (" .. familiar .. ")")
+		return true
+	end
 	-- Tools: grant usability only. HasAccessToTool reads WeaponsUnlocked, so this
 	-- alone makes the tool work at gathering nodes. We deliberately do NOT touch
 	-- WorldUpgradesAdded — that flag is owned solely by the WeaponShop-purchase

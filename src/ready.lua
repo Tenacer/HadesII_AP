@@ -23,6 +23,7 @@ import 'lib/notify.lua'
 import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/tools.lua'
+import 'lib/familiar.lua'
 import 'lib/traphelper.lua'
 import 'lib/broker.lua'
 import 'lib/items.lua'
@@ -184,6 +185,37 @@ modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, gift
 		end
 	end
 	return base(npc, giftName)
+end)
+
+-- ── Familiarsanity location check ─────────────────────────────────────────────
+
+-- Recruiting a familiar (the petting sequence) is the AP location check. We fire
+-- the check up front so it registers immediately, let the full vanilla recruit
+-- presentation play for feedback, then undo the vanilla FamiliarsUnlocked grant —
+-- ownership of the companion is owned by the AP item (H2AP_GiveItem), not the
+-- recruit. The AP_FamiliarReceived guard protects the item-first case: if the AP
+-- item already granted the familiar, we leave FamiliarsUnlocked alone so the
+-- player keeps the companion they already own. AP_FamiliarChecked stops the wild
+-- encounter respawning (see H2AP_PatchFamiliarGates). Frinos (hub) routes through
+-- this same function, so all five familiars are handled uniformly.
+modutil.mod.Path.Wrap("FamiliarRecruitPresentation", function(base, usee, args)
+	local settings = H2AP_LoadSettings()
+	local name = usee and usee.Name
+	if not (settings and settings.familiarsanity == 1 and name and FAMILIAR_LOCATIONS[name]) then
+		return base(usee, args)
+	end
+	GameState.AP_FamiliarChecked = GameState.AP_FamiliarChecked or {}
+	GameState.AP_FamiliarChecked[name] = true
+	H2AP_CheckLocation(FAMILIAR_LOCATIONS[name])
+	base(usee, args)
+	local received = GameState.AP_FamiliarReceived and GameState.AP_FamiliarReceived[name]
+	if not received then
+		GameState.FamiliarsUnlocked[name] = nil
+		if CurrentRun and CurrentRun.FamiliarsUnlocked then
+			CurrentRun.FamiliarsUnlocked[name] = nil
+		end
+	end
+	H2AP_ShowBossRewardBanner()
 end)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────

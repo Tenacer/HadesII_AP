@@ -29,6 +29,7 @@ H2AP_PatchIncantationIcons()
 H2AP_PatchIncantationGates()
 H2AP_PatchIncantationCosts()
 H2AP_PatchGoalIncantationGate()
+H2AP_PatchFamiliarGates()
 -- Flush the outbox immediately so the Python client sees the game is running.
 H2AP_FlushOutbox()
 
@@ -86,6 +87,7 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	H2AP_PatchIncantationIcons()
 	H2AP_PatchIncantationGates()
 	H2AP_PatchIncantationCosts()
+	H2AP_PatchFamiliarGates()
 	H2AP_SetupMap()
 	if not _polling_started then
 		_polling_started = true
