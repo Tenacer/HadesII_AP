@@ -39,6 +39,58 @@ local ROUTE_FOR_BIOME = {
 	N = "surface",    O = "surface",    P = "surface",    Q = "surface",
 }
 
+-- ── Room-based location systems (room_based / room_weapon_based) ───────────────
+-- Per-route max run depth. MUST match the apworld's UNDERWORLD_ROOM_MAX /
+-- SURFACE_ROOM_MAX (Locations.py, derived from the *_BIOME_BOUNDS). Underworld is
+-- variable (Tartarus has optional rooms) so its tail is auto-granted on the
+-- Chronos kill; surface is fixed. The apworld places each depth's check in its
+-- biome region (boss-victory gated) — the mod only fires checks by name, so it
+-- doesn't need the per-biome boundaries, only the per-route maxima here.
+-- TODO(confirm): estimates — H2AP_OnRoomCleared logs the observed max run depth
+-- per route AND each biome's start depth ("[HadesII_AP] biome <X> starts at run
+-- depth N"); update both sides (incl. the apworld bounds) after a full run.
+local ROOM_DEPTH_MAX = { underworld = 40, surface = 36 }
+-- Run depth where Tartarus begins; the Chronos-kill auto-grant covers
+-- [UNDERWORLD_AUTOGRANT_FROM .. ROOM_DEPTH_MAX.underworld].
+local UNDERWORLD_AUTOGRANT_FROM = 26
+local ROUTE_LABEL = { underworld = "Underworld", surface = "Surface" }
+
+-- Resolves the active location system from slot data. Slot-data values may be the
+-- raw int (AP as_dict) or the option string, so accept both (mirrors the
+-- score_split_mode handling below).
+function H2AP_LocationSystem()
+	local s = H2AP_LoadSettings() or {}
+	local v = s.location_system
+	if v == 1 or v == "room_based" then return "room" end
+	if v == 2 or v == "room_weapon_based" then return "room_weapon" end
+	return "score"
+end
+
+-- Two-digit zero-padded depth, matching the apworld's room_location_name (%02d).
+local function pad_depth(n) return string.format("%02d", n) end
+
+-- Fire the room check for a single (route, depth[, weapon]) under the active room
+-- system. Out-of-range depths are clamped (logged once) rather than crashing, so
+-- an under-sized ROOM_DEPTH_MAX never breaks a run.
+local function H2AP_FireRoomCheck(route, depth, system)
+	local maxd = ROOM_DEPTH_MAX[route]
+	if not maxd or depth < 1 then return end
+	if depth > maxd then
+		print("[HadesII_AP] WARNING: " .. route .. " run depth " .. depth
+			.. " exceeds ROOM_DEPTH_MAX (" .. maxd .. ") — bump the constant (mod + apworld)")
+		return
+	end
+	local label = ROUTE_LABEL[route]
+	local name = "Clear " .. label .. " Room " .. pad_depth(depth)
+	if system == "room_weapon" then
+		local weapon = type(GetEquippedWeapon) == "function" and GetEquippedWeapon() or nil
+		local token = weapon and WEAPON_SHORT[weapon]
+		if not token then return end  -- unknown/no weapon: nothing to credit
+		name = name .. " " .. token
+	end
+	H2AP_CheckLocation(name)
+end
+
 -- Cumulative score → number of score checks unlocked.
 -- Checks 1-10 use triangular thresholds: check n unlocks at score n*(n+1)/2
 -- (check 1=1, 2=3, 3=6, …, 10=55). Checks 11+ cost 10 points each beyond score 55.
@@ -284,6 +336,41 @@ function H2AP_CheckBossDefeatsVictory()
 	end
 end
 
+-- Room-based counting trigger. Hooked to DoUnlockRoomExits, which fires once per
+-- room regardless of combat (unlike OnAllEnemiesDead) — matching Polycosmos'
+-- room hook — so depths at non-combat rooms (shops, story, forced-shop PreBoss)
+-- still get their check. No-op outside the room/room_weapon systems. Dedup is by
+-- H2AP_CheckLocation, so save/load re-fires and revisited depths are harmless.
+function H2AP_OnRoomExitsUnlocked(currentRoom)
+	if not currentRoom then return end
+	local system = H2AP_LocationSystem()
+	if system ~= "room" and system ~= "room_weapon" then return end
+
+	local biome = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
+	local route = ROUTE_FOR_BIOME[biome] or "underworld"
+	local depth = (CurrentRun and CurrentRun.RunDepthCache) or 0
+	H2AP_FireRoomCheck(route, depth, system)
+
+	-- Track + log the observed max depth per route AND the shallowest run depth
+	-- each biome is entered at, so the apworld's per-route maxima and
+	-- {UNDERWORLD,SURFACE}_BIOME_BOUNDS can be confirmed from a real run.
+	local state = H2AP_LoadState()
+	state.room_depth_max = state.room_depth_max or {}
+	state.biome_min_depth = state.biome_min_depth or {}
+	local dirty = false
+	if depth > (state.room_depth_max[route] or 0) then
+		state.room_depth_max[route] = depth
+		print("[HadesII_AP] new max " .. route .. " run depth: " .. depth)
+		dirty = true
+	end
+	if biome ~= "" and depth >= 1 and depth < (state.biome_min_depth[biome] or 1e9) then
+		state.biome_min_depth[biome] = depth
+		print("[HadesII_AP] biome " .. biome .. " starts at run depth " .. depth)
+		dirty = true
+	end
+	if dirty then H2AP_SaveState() end
+end
+
 function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	if not currentRoom then return end
 
@@ -330,6 +417,23 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 		-- met (no-op under True Ending, which ends via death.lua on the credits).
 		H2AP_CheckBossDefeatsVictory()
 
+		-- Room-based systems: Tartarus has optional rooms (variable depth), so a
+		-- short path to Chronos can skip deep underworld room checks. Auto-grant
+		-- the Tartarus-range underworld rooms on the Chronos kill so they stay
+		-- completable (mirrors Polycosmos' ProcessAutomaticRooms; underworld-only —
+		-- the surface route's boss depths are fixed). For room_weapon this grants
+		-- the equipped weapon's tail (H2AP_FireRoomCheck reads GetEquippedWeapon).
+		if boss_key == "chronos" then
+			local system = H2AP_LocationSystem()
+			if system == "room" or system == "room_weapon" then
+				for depth = UNDERWORLD_AUTOGRANT_FROM, ROOM_DEPTH_MAX.underworld do
+					H2AP_FireRoomCheck("underworld", depth, system)
+				end
+				print("[HadesII_AP] Chronos cleared — auto-granted underworld room tail "
+					.. UNDERWORLD_AUTOGRANT_FROM .. ".." .. ROOM_DEPTH_MAX.underworld)
+			end
+		end
+
 		local settings = H2AP_LoadSettings() or {}
 		-- In AP mode, redirect the exit to EndEarlyAccessPresentation (the proper
 		-- run-completion sequence) instead of loading the post-boss story room.
@@ -350,17 +454,26 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 		return
 	end
 
-	-- Regular rooms: accumulate score → trigger score checks.
+	-- Regular rooms. Dispatch on the active location system.
+	local biome  = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
+	local route  = ROUTE_FOR_BIOME[biome] or "underworld"
+	local system = H2AP_LocationSystem()
+
+	-- Room-based systems count depths on DoUnlockRoomExits (fires for ALL rooms,
+	-- combat or not — see H2AP_OnRoomExitsUnlocked), NOT here: OnAllEnemiesDead
+	-- skips non-combat rooms (shops/story/forced-shop PreBoss), which would leave
+	-- those depths' checks permanently unobtainable.
+	if system ~= "score" then return end
+
+	-- score_based: accumulate score → trigger score checks.
 	local state    = H2AP_LoadState()
 	local settings = H2AP_LoadSettings()
 
-	local biome    = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
 	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
 	local max_checks = settings.score_rewards_amount or 150
 
 	-- Credit the score to the route this room belongs to (default underworld for
 	-- any unrecognized prefix). Each route is budgeted independently.
-	local route = ROUTE_FOR_BIOME[biome] or "underworld"
 	local route_field = "score_" .. route
 	state[route_field] = (state[route_field] or 0) + points
 	state.score = (state.score_underworld or 0) + (state.score_surface or 0)

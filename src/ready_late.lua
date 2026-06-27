@@ -109,6 +109,15 @@ modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEnc
 	return result
 end)
 
+-- Room-based location systems count depths here, not in OnAllEnemiesDead:
+-- DoUnlockRoomExits fires once per room regardless of combat, so non-combat
+-- rooms (shops/story/forced-shop PreBoss) still light their depth check.
+modutil.mod.Path.Wrap("DoUnlockRoomExits", function(base, run, room)
+	local result = base(run, room)
+	H2AP_OnRoomExitsUnlocked(room)
+	return result
+end)
+
 -- Arachne cocoon rooms never call OnAllEnemiesDead: their encounter event set is
 -- { BeginArachneEncounter, WaitForArachneRewardFound } (see EncounterSets.lua),
 -- ending when the reward cocoon's death fires the "ArachneRewardFound" notify that
@@ -117,7 +126,9 @@ end)
 -- room is cleared). No double-count risk since OnAllEnemiesDead never runs for them.
 modutil.mod.Path.Wrap("WaitForArachneRewardFound", function(base, encounter)
 	local result = base(encounter)
-	H2AP_OnRoomCleared(CurrentRun and CurrentRun.CurrentRoom, encounter)
+	local room = CurrentRun and CurrentRun.CurrentRoom
+	H2AP_OnRoomCleared(room, encounter)        -- score_based scoring + boss handling
+	H2AP_OnRoomExitsUnlocked(room)             -- room_based depth check (dedup-safe)
 	return result
 end)
 

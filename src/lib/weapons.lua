@@ -44,6 +44,18 @@ WEAPON_CLEAR_LOCATIONS = {
 	WeaponSuit       = "Coat Weapon Clear",
 }
 
+-- Game internal weapon name → AP-facing short token, used to suffix
+-- room_weapon_based location names ("Clear Underworld Room NN <token>"). MUST
+-- match ROOM_WEAPON_TOKENS in the apworld's Locations.py.
+WEAPON_SHORT = {
+	WeaponStaffSwing = "Staff",
+	WeaponDagger     = "Daggers",
+	WeaponTorch      = "Torches",
+	WeaponAxe        = "Axe",
+	WeaponLob        = "Skull",
+	WeaponSuit       = "Coat",
+}
+
 -- AP item name → game internal weapon name (for H2AP_GiveItem).
 -- Keys must match the bare item names from the apworld's items.csv exactly (no
 -- " Item" suffix — that suffix only exists on the location names).
