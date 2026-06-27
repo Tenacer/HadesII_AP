@@ -4,7 +4,9 @@
 -- ── State persistence ─────────────────────────────────────────────────────────
 -- Persisted as JSON so complex fields (checked_locations array) survive restarts.
 -- Fields:
---   score              (int)   — cumulative room-clear score
+--   score              (int)   — cumulative room-clear score (sum of the two routes; display only)
+--   score_underworld   (int)   — cumulative score on the underworld/Chronos route (F/G/H/I)
+--   score_surface      (int)   — cumulative score on the surface/Typhon route (N/O/P/Q)
 --   checks_sent        (int)   — number of score checks earned so far
 --   items_index        (int)   — next AP item index to process
 --   deaths             (int)   — raw death counter forwarded to DeathLink
@@ -26,6 +28,8 @@ function H2AP_LoadState()
 	if _state then return _state end
 	_state = {
 		score              = 0,
+		score_underworld   = 0,
+		score_surface      = 0,
 		checks_sent        = 0,
 		items_index        = 0,
 		deaths             = 0,
@@ -53,6 +57,17 @@ function H2AP_LoadState()
 		end
 		if type(_state.weapon_clears) ~= "table" then
 			_state.weapon_clears = {}
+		end
+		-- Migration: legacy saves only have a single combined `score`. Seed the
+		-- per-route sub-scores from it so an in-progress run keeps its earned
+		-- checks. We can't recover the true per-route split, so attribute the
+		-- whole legacy score to the underworld route (the earlier route — the
+		-- conservative choice, as the surface budget is the smaller one).
+		if type(_state.score_underworld) ~= "number" then
+			_state.score_underworld = _state.score or 0
+		end
+		if type(_state.score_surface) ~= "number" then
+			_state.score_surface = 0
 		end
 	end
 	return _state

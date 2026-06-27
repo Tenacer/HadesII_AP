@@ -28,6 +28,17 @@ local BIOME_POINTS = {
 	Q = 4,  -- Summit (Typhon route)
 }
 
+-- Route a room belongs to, keyed by room-name prefix. The underworld/Chronos
+-- path (F/G/H/I) and the surface/Typhon path (N/O/P/Q) accumulate score
+-- independently, each capped at its own share of the total check budget
+-- (see H2AP_ScoreChecksSent). This is purely a Lua-side budgeting concern —
+-- score checks are interchangeable filler, so the Python client doesn't care
+-- which physical location lights up, only the total count.
+local ROUTE_FOR_BIOME = {
+	F = "underworld", G = "underworld", H = "underworld", I = "underworld",
+	N = "surface",    O = "surface",    P = "surface",    Q = "surface",
+}
+
 -- Cumulative score → number of score checks unlocked.
 -- Checks 1-10 use triangular thresholds: check n unlocks at score n*(n+1)/2
 -- (check 1=1, 2=3, 3=6, …, 10=55). Checks 11+ cost 10 points each beyond score 55.
@@ -38,6 +49,29 @@ local function checks_for_score(s)
 		return math.floor((-1 + math.sqrt(1 + 8 * s)) / 2)
 	end
 	return 10 + math.floor((s - TRIANGLE_MAX_SCORE) / 10)
+end
+
+-- Total score checks earned from the room-clear score.
+--   Combined mode (score_split_mode 0): one pool — the summed score feeds the
+--     full budget, so any route can earn all the checks on its own.
+--   Separate mode (score_split_mode 1, default): each route accumulates score
+--     independently and is capped at its own share of the budget.
+--     `surface_score_ratio` (0-100, default 40) is the surface route's
+--     percentage of `max_checks`; the underworld route gets the rest. An
+--     all-underworld player therefore tops out at the underworld share and must
+--     play surface for the remaining checks (and vice versa).
+local function H2AP_ScoreChecksSent(state, settings, max_checks)
+	local mode = settings.score_split_mode
+	if not (mode == 1 or mode == "separate") then
+		return checks_for_score(state.score or 0)
+	end
+	local ratio = settings.surface_score_ratio
+	if type(ratio) ~= "number" then ratio = 40 end
+	local surface_budget    = math.floor(max_checks * ratio / 100)
+	local underworld_budget = max_checks - surface_budget
+	local under_checks   = math.min(checks_for_score(state.score_underworld or 0), underworld_budget)
+	local surface_checks = math.min(checks_for_score(state.score_surface or 0),    surface_budget)
+	return under_checks + surface_checks
 end
 
 local BOSS_LOCATION_BASE_NAME = {
@@ -319,16 +353,24 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
 	local max_checks = settings.score_rewards_amount or 150
 
-	state.score = state.score + points
+	-- Credit the score to the route this room belongs to (default underworld for
+	-- any unrecognized prefix). Each route is budgeted independently.
+	local route = ROUTE_FOR_BIOME[biome] or "underworld"
+	local route_field = "score_" .. route
+	state[route_field] = (state[route_field] or 0) + points
+	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
 	H2AP_NotifyScore(state.score, points)
-	local new_checks = math.min(checks_for_score(state.score), max_checks)
+
+	local new_checks = math.min(H2AP_ScoreChecksSent(state, settings, max_checks), max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
 		H2AP_NotifyMilestone(state.checks_sent, max_checks)
 	end
 
-	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. ") → " .. state.score .. " total")
+	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. "/" .. route .. ") → "
+		.. state.score .. " total (U:" .. (state.score_underworld or 0)
+		.. " S:" .. (state.score_surface or 0) .. ")")
 	H2AP_SaveState()
 	H2AP_FlushOutbox()
 end

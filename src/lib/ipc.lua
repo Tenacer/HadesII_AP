@@ -51,6 +51,8 @@ function H2AP_FlushOutbox(extra)
 	local s = H2AP_LoadState()
 	local data = {
 		score             = s.score,
+		score_underworld  = s.score_underworld or 0,
+		score_surface     = s.score_surface or 0,
 		checks_sent       = s.checks_sent,
 		items_index       = s.items_index,
 		deaths            = s.deaths,
