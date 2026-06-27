@@ -51,19 +51,24 @@ local function checks_for_score(s)
 	return 10 + math.floor((s - TRIANGLE_MAX_SCORE) / 10)
 end
 
--- Total score checks earned from the room-clear score.
+-- Score checks earned from the room-clear score, returned as (under, surface).
+-- The caller sums them for the total; the per-route split also feeds the IPC
+-- outbox so the client can map each route's checks to the correct location-id
+-- range (underworld → low/Erebus ids, surface → high/Ephyra ids).
 --   Combined mode (score_split_mode 0): one pool — the summed score feeds the
---     full budget, so any route can earn all the checks on its own.
+--     full budget, so any route can earn every check. Returned as (total, 0);
+--     the client lights consecutive ids from the combined `checks_sent`.
 --   Separate mode (score_split_mode 1, default): each route accumulates score
 --     independently and is capped at its own share of the budget.
 --     `surface_score_ratio` (0-100, default 40) is the surface route's
 --     percentage of `max_checks`; the underworld route gets the rest. An
 --     all-underworld player therefore tops out at the underworld share and must
---     play surface for the remaining checks (and vice versa).
+--     play surface for the remaining checks (and vice versa). The budget split
+--     here MUST match Locations.score_check_split on the apworld side.
 local function H2AP_ScoreChecksSent(state, settings, max_checks)
 	local mode = settings.score_split_mode
 	if not (mode == 1 or mode == "separate") then
-		return checks_for_score(state.score or 0)
+		return checks_for_score(state.score or 0), 0
 	end
 	local ratio = settings.surface_score_ratio
 	if type(ratio) ~= "number" then ratio = 40 end
@@ -71,7 +76,7 @@ local function H2AP_ScoreChecksSent(state, settings, max_checks)
 	local underworld_budget = max_checks - surface_budget
 	local under_checks   = math.min(checks_for_score(state.score_underworld or 0), underworld_budget)
 	local surface_checks = math.min(checks_for_score(state.score_surface or 0),    surface_budget)
-	return under_checks + surface_checks
+	return under_checks, surface_checks
 end
 
 local BOSS_LOCATION_BASE_NAME = {
@@ -361,7 +366,10 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
 	H2AP_NotifyScore(state.score, points)
 
-	local new_checks = math.min(H2AP_ScoreChecksSent(state, settings, max_checks), max_checks)
+	local under_checks, surface_checks = H2AP_ScoreChecksSent(state, settings, max_checks)
+	state.checks_sent_underworld = under_checks
+	state.checks_sent_surface    = surface_checks
+	local new_checks = math.min(under_checks + surface_checks, max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)

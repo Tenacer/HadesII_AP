@@ -7,7 +7,9 @@
 --   score              (int)   — cumulative room-clear score (sum of the two routes; display only)
 --   score_underworld   (int)   — cumulative score on the underworld/Chronos route (F/G/H/I)
 --   score_surface      (int)   — cumulative score on the surface/Typhon route (N/O/P/Q)
---   checks_sent        (int)   — number of score checks earned so far
+--   checks_sent        (int)   — number of score checks earned so far (combined total)
+--   checks_sent_underworld (int) — score checks earned from the underworld budget (separate mode)
+--   checks_sent_surface    (int) — score checks earned from the surface budget (separate mode)
 --   items_index        (int)   — next AP item index to process
 --   deaths             (int)   — raw death counter forwarded to DeathLink
 --   victory            (bool)  — true once the goal condition is met
@@ -31,6 +33,8 @@ function H2AP_LoadState()
 		score_underworld   = 0,
 		score_surface      = 0,
 		checks_sent        = 0,
+		checks_sent_underworld = 0,
+		checks_sent_surface    = 0,
 		items_index        = 0,
 		deaths             = 0,
 		victory            = false,

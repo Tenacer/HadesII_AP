@@ -54,6 +54,8 @@ function H2AP_FlushOutbox(extra)
 		score_underworld  = s.score_underworld or 0,
 		score_surface     = s.score_surface or 0,
 		checks_sent       = s.checks_sent,
+		checks_sent_underworld = s.checks_sent_underworld or 0,
+		checks_sent_surface    = s.checks_sent_surface or 0,
 		items_index       = s.items_index,
 		deaths            = s.deaths,
 		victory           = s.victory or false,
