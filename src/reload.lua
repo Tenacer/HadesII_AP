@@ -277,6 +277,18 @@ end
 -- text Id via auto-lookup, and these entries' Ids equal their internal names — the
 -- *_LOCATIONS keys). HelpText.en.sjson has no such entries, which is why these must
 -- be patched here rather than in sjson_HelpText.
+-- initial_weapon slot value → internal weapon name. Kept local (not the
+-- AP_STARTING_WEAPONS from lib/weapons.lua) because the SJSON hooks can fire
+-- before on_ready_late imports that module. Order matches Options.py.
+local STARTING_WEAPON_NAMES = {
+	[0] = "WeaponStaffSwing",
+	[1] = "WeaponDagger",
+	[2] = "WeaponTorch",
+	[3] = "WeaponAxe",
+	[4] = "WeaponLob",
+	[5] = "WeaponSuit",
+}
+
 function sjson_TraitText(data)
 	local settings = H2AP_LoadSettings() or {}
 	local do_weapon = settings.weaponsanity == 1
@@ -284,11 +296,17 @@ function sjson_TraitText(data)
 	local do_aspect = settings.hidden_aspectsanity == 1
 	if not (do_weapon or do_tool or do_aspect) then return end
 
+	-- The player already starts with this weapon, so its shop slot is NOT an AP
+	-- check (its unlock location is excluded — see should_ignore_weapon_location
+	-- in the apworld). Leave its vanilla name instead of relabelling it
+	-- "AP Location Check".
+	local start_weapon = STARTING_WEAPON_NAMES[settings.initial_weapon or 0]
+
 	local location_items = H2AP_ReadLocationItems() or {}
 	for _, entry in ipairs(data.Texts) do
 		local id = entry.Id
 		if id then
-			local ap_location = (do_weapon and WEAPON_LOCATIONS[id])
+			local ap_location = (do_weapon and id ~= start_weapon and WEAPON_LOCATIONS[id])
 				or (do_tool and TOOL_LOCATIONS[id])
 				or (do_aspect and HIDDEN_ASPECT_LOCATIONS[id])
 			if ap_location then

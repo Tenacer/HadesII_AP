@@ -51,20 +51,38 @@ end
 
 -- ── Helper dispatch ──────────────────────────────────────────────────────────
 
+-- Apply a flat max-health bonus to the live run hero the way the game does:
+-- as a RoomRewardMaxHealthTrait (PropertyChanges to MaxHealth) added via
+-- AddTraitToHero. Hades II recomputes CurrentRun.Hero.MaxHealth from the hero's
+-- traits on every trait recalc (UpdateHeroTraitDictionary / EquipMetaUpgrades /
+-- room loads), so a plain `Hero.MaxHealth = Hero.MaxHealth + n` mutation is wiped
+-- on the next recalc — which is why the helper "did nothing". Routing through a
+-- trait makes the bonus part of that recomputation, so it sticks for the run.
+-- (Mirrors AddMaxHealth in RoomLogic.lua, minus its threading/UI presentation so
+-- it is safe to call at StartNewRun and during an inbox poll.)
+local function apply_max_health_trait(amount)
+	if amount <= 0 then return false end
+	if not (CurrentRun and CurrentRun.Hero) then return false end
+	if not (GetProcessedTraitData and AddTraitToHero) then return false end
+	local ok = pcall(function()
+		local healthTraitData = GetProcessedTraitData({
+			Unit = CurrentRun.Hero, TraitName = "RoomRewardMaxHealthTrait" })
+		healthTraitData.PropertyChanges[1].ChangeValue = amount
+		AddTraitToHero({ TraitData = healthTraitData })
+	end)
+	return ok
+end
+
 function H2AP_GiveItemHelper(item_name)
 	if not init_lodger() then return false end
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
 		L.MaxHealth = L.MaxHealth + 1
-		-- If a run is live, bump the active hero immediately by the per-item
-		-- amount. The full cumulative bonus is re-applied on the fresh hero
-		-- each run by H2AP_ApplyMaxHealthHelper.
-		if CurrentRun and CurrentRun.Hero then
-			CurrentRun.Hero.MaxHealth = (CurrentRun.Hero.MaxHealth or 0) + HELPER_MAX_HEALTH_PER
-			CurrentRun.Hero.Health    = math.min(
-				(CurrentRun.Hero.Health or 0) + HELPER_MAX_HEALTH_PER,
-				CurrentRun.Hero.MaxHealth)
-			if ShowHealthUI then ShowHealthUI() end
+		-- If a run is live, grant this item's share immediately (as a trait so it
+		-- survives recalcs). The full cumulative bonus is re-applied on the fresh
+		-- hero each run by H2AP_ApplyMaxHealthHelper.
+		if apply_max_health_trait(HELPER_MAX_HEALTH_PER) then
+			if FrameState then FrameState.RequestUpdateHealthUI = true end
 		end
 	elseif item_name == "Initial Money Helper" then
 		L.InitialMoney = L.InitialMoney + 1
@@ -82,18 +100,19 @@ end
 
 -- Apply the full cumulative MaxHealth bonus to the freshly-built run hero.
 -- Called from the StartNewRun override AFTER vanilla CreateNewHero, where
--- CurrentRun.Hero is a clean DeepCopy of HeroData (base 30, no prior bonus),
--- so we add the whole bonus each run rather than mutating the shared template.
--- (Hades II has no HeroData.DefaultHero — that was a Hades 1 structure.)
+-- CurrentRun.Hero is a clean DeepCopy of HeroData (base 30, no prior bonus) with
+-- its trait dictionary freshly built, so we add the whole bonus each run via a
+-- trait (see apply_max_health_trait) rather than a raw field write that the next
+-- trait recalc would wipe. Health is topped up to the new max since this runs at
+-- run start before the hero takes damage.
 function H2AP_ApplyMaxHealthHelper()
 	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
 	local bonus = L.MaxHealth * HELPER_MAX_HEALTH_PER
 	if bonus <= 0 then return end
-	if CurrentRun and CurrentRun.Hero then
-		CurrentRun.Hero.MaxHealth = (CurrentRun.Hero.MaxHealth or 0) + bonus
-		CurrentRun.Hero.Health    = CurrentRun.Hero.MaxHealth
-		if ShowHealthUI then ShowHealthUI() end
+	if apply_max_health_trait(bonus) and CurrentRun and CurrentRun.Hero then
+		CurrentRun.Hero.Health = CurrentRun.Hero.MaxHealth
+		if FrameState then FrameState.RequestUpdateHealthUI = true end
 	end
 end
 

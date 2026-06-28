@@ -118,9 +118,14 @@ local function notify_start(slot, t)
 			SetScaleX({ Id = id, Fraction = 10 / 6 })
 			SetScaleY({ Id = id, Fraction = 0.1 })
 			SetColor({ Id = id, Color = t.bgcol })
+			-- Center the text on the backing rectangle's anchor. Left-justified text
+			-- grew rightward from the box centre and spilled past the right edge
+			-- ("text outside the box"); Center keeps it balanced within the backing
+			-- (a thin single-line bar, so we don't wrap — wrapping would spill out
+			-- the top/bottom of the 1-line-tall backing instead).
 			CreateTextBox({
 				Id = id, Text = t.text, FontSize = t.fontsize, OffsetX = 0, OffsetY = 0,
-				Color = t.color, Font = t.font, Justification = "Left",
+				Color = t.color, Font = t.font, Justification = "Center",
 			})
 			SetAlpha({ Id = id, Fraction = 0 })
 			if t.sound and t.sound ~= "" then PlaySound({ Name = t.sound }) end
