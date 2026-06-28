@@ -231,10 +231,12 @@ end
 -- Score ticks fire every cleared room — no sound to avoid spam. `route_label`
 -- ("Underworld"/"Surface") is shown in separate split mode so the player knows
 -- which route's score they're building; nil → combined mode shows the total.
-function H2AP_NotifyScore(delta, total, route_label)
+function H2AP_NotifyScore(delta, total, route_label, to_next)
 	local route = route_label and (route_label .. " ") or ""
 	local label = route_label and (route_label .. " score") or "Total score"
-	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total),
+	-- `to_next` (points until the next check) is nil once every check is unlocked.
+	local tail = to_next and ("  (" .. tostring(to_next) .. " to next check)") or ""
+	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total) .. tail,
 		COLOR_SCORE, nil, "")
 end
 

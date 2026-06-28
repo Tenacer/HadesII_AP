@@ -92,15 +92,68 @@ local function H2AP_FireRoomCheck(route, depth, system)
 end
 
 -- Cumulative score → number of score checks unlocked.
--- Checks 1-10 use triangular thresholds: check n unlocks at score n*(n+1)/2
--- (check 1=1, 2=3, 3=6, …, 10=55). Checks 11+ cost 10 points each beyond score 55.
-local TRIANGLE_MAX_SCORE = 55  -- 10*11/2
-local function checks_for_score(s)
-	if s < 1 then return 0 end
-	if s <= TRIANGLE_MAX_SCORE then
-		return math.floor((-1 + math.sqrt(1 + 8 * s)) / 2)
+-- The per-check gap (points needed over the previous check) follows a
+-- slow-rise → mid-plateau → rise-again shape, expressed as a double smoothstep
+-- over the check's fractional position t = (n-1)/(N-1), so the plateau lands in
+-- the middle and the final ramp lands at the end regardless of the route's
+-- budget N. Gaps are rounded to whole points (clearer to players); thresholds
+-- are their running sum and so are integers too. Tunables below; raise
+-- SCORE_G1 to lift the whole curve, raise SCORE_G2 for a steeper finale.
+local SCORE_P1, SCORE_P2 = 0.25, 0.70      -- end of first rise / start of finale (fractions)
+local SCORE_G0, SCORE_G1, SCORE_G2 = 2, 11, 18  -- start / plateau / end gap (points)
+
+local function smoothstep(x)
+	if x < 0 then x = 0 elseif x > 1 then x = 1 end
+	return x * x * (3 - 2 * x)
+end
+
+-- Integer cumulative-score thresholds for a route whose total budget is N
+-- checks: threshold[n] = score at which check n unlocks. Cached per N (budgets
+-- are stable within a run, so each table builds once).
+local _threshold_cache = {}
+local function score_thresholds(N)
+	if N < 1 then return {} end
+	local cached = _threshold_cache[N]
+	if cached then return cached end
+	local t, cum = {}, 0
+	for n = 1, N do
+		local frac = (N > 1) and (n - 1) / (N - 1) or 0
+		local g
+		if frac <= SCORE_P1 then
+			g = SCORE_G0 + (SCORE_G1 - SCORE_G0) * smoothstep(frac / SCORE_P1)
+		elseif frac < SCORE_P2 then
+			g = SCORE_G1
+		else
+			g = SCORE_G1 + (SCORE_G2 - SCORE_G1) * smoothstep((frac - SCORE_P2) / (1 - SCORE_P2))
+		end
+		cum = cum + math.floor(g + 0.5)  -- integer points per check
+		t[n] = cum
 	end
-	return 10 + math.floor((s - TRIANGLE_MAX_SCORE) / 10)
+	_threshold_cache[N] = t
+	return t
+end
+
+-- Cumulative score → number of score checks unlocked, for a route budgeted at
+-- N checks. Thresholds are monotone increasing; a linear scan is plenty here.
+local function checks_for_score(s, N)
+	if s < 1 or N < 1 then return 0 end
+	local t = score_thresholds(N)
+	local count = 0
+	for n = 1, N do
+		if s >= t[n] then count = n else break end
+	end
+	return count
+end
+
+-- Points remaining until the next score check unlocks, for a route at score `s`
+-- with budget `N`. Returns nil once every check in the budget is unlocked (so
+-- callers can omit the "to next check" hint at the cap).
+function H2AP_PointsToNextScoreCheck(s, N)
+	if N < 1 then return nil end
+	local t = score_thresholds(N)
+	local unlocked = checks_for_score(s, N)
+	if unlocked >= N then return nil end
+	return t[unlocked + 1] - s
 end
 
 -- Score checks earned from the room-clear score, returned as (under, surface).
@@ -138,11 +191,12 @@ end
 
 local function H2AP_ScoreChecksSent(state, settings, max_checks)
 	if not H2AP_ScoreSeparate(settings) then
-		return checks_for_score(state.score or 0), 0
+		return checks_for_score(state.score or 0, max_checks), 0
 	end
 	local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
-	local under_checks   = math.min(checks_for_score(state.score_underworld or 0), underworld_budget)
-	local surface_checks = math.min(checks_for_score(state.score_surface or 0),    surface_budget)
+	-- The threshold curve already tops out exactly at the budget, so no clamp.
+	local under_checks   = checks_for_score(state.score_underworld or 0, underworld_budget)
+	local surface_checks = checks_for_score(state.score_surface or 0,    surface_budget)
 	return under_checks, surface_checks
 end
 
@@ -494,11 +548,16 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	state[route_field] = (state[route_field] or 0) + points
 	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
 	-- Separate mode: name the route in the toast so the player sees which score
-	-- they're building. Combined mode shows the running total.
+	-- they're building. Combined mode shows the running total. Either way include
+	-- the points remaining until the next check unlocks (nil once capped).
 	if separate then
-		H2AP_NotifyScore(points, state[route_field], ROUTE_LABEL[route])
+		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
+		local route_budget = (route == "surface") and surface_budget or underworld_budget
+		local to_next = H2AP_PointsToNextScoreCheck(state[route_field], route_budget)
+		H2AP_NotifyScore(points, state[route_field], ROUTE_LABEL[route], to_next)
 	else
-		H2AP_NotifyScore(points, state.score, nil)
+		local to_next = H2AP_PointsToNextScoreCheck(state.score, max_checks)
+		H2AP_NotifyScore(points, state.score, nil, to_next)
 	end
 
 	local prev_under   = state.checks_sent_underworld or 0
