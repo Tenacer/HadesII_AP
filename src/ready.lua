@@ -100,12 +100,11 @@ end)
 -- ── Cauldron interception ────────────────────────────────────────────────────
 
 -- Three-way dispatch on the brewed incantation:
---  1. AP-keyed (surface lock or goal incantation under their respective
---     toggles): fire the AP location check, then let base() run so the vanilla
---     WorldUpgrade effect applies normally. The AP item already unlocked the
---     cauldron entry (see H2AP_PatchIncantationGates) — brewing is the natural
---     consummation of that, both granting the effect locally and sending the
---     AP check.
+--  1. Surface-lock (AP-keyed under lock_surface_incantations): brewing is the AP
+--     location CHECK. The effect was delivered by the received AP item
+--     (items.lua), so we suppress the vanilla brew effect (no base()) and mark
+--     AP_SurfaceIncantationChecked — exactly like cauldronsanity, but the recipe
+--     is revealed by the vanilla Moros/Hermes story rather than the AP item.
 --  2. Cauldronsanity (the 86 non-special incantations): intercept and suppress
 --     the vanilla effect. The AP item delivers the effect when received.
 --     We don't call base() because CloseGhostAdminScreen with the purchase
@@ -129,11 +128,34 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 		return base(screen, button)
 	end
 
-	-- AP-keyed: fire check, then vanilla brew applies the effect.
+	-- Surface-lock: brewing IS the location check; the effect comes from the AP
+	-- item (items.lua), so suppress the vanilla WorldUpgrade grant (no base()) —
+	-- otherwise brewing alone would unlock the surface, defeating the shuffle.
+	-- AP_SurfaceIncantationChecked records that the check fired so the cauldron
+	-- offer mask (GhostAdminDisplayCategory wrap) demotes the recipe to "brewed"
+	-- and never re-fires the check.
 	if H2AP_IsApKeyedIncantation(wu_key, settings) then
+		GhostAdminItemPurchasedPresentation(button, itemData)
+		GameState.AP_SurfaceIncantationChecked = GameState.AP_SurfaceIncantationChecked or {}
+		GameState.AP_SurfaceIncantationChecked[wu_key] = true
+		-- AltRunDoor's WorldUpgradesAdded is purely a "brewed" record — the door
+		-- itself is WorldUpgrades-gated and granted by the AP item — so set it on
+		-- brew to mirror vanilla: it ends the pre-brew Hermes/Hecate beats
+		-- (PathFalse-WorldUpgradesAdded) and fires the surface-door-unlocked prompt
+		-- (CurrentRun.WorldUpgradesAdded). SurfacePenaltyCure's WorldUpgradesAdded
+		-- IS most of its cure effect, so we must NOT set it here — brewing must not
+		-- grant the cure without the AP item; its done-state rides
+		-- AP_SurfaceIncantationChecked + the offer mask instead.
+		if wu_key == "WorldUpgradeAltRunDoor" then
+			GameState.WorldUpgradesAdded[wu_key] = true
+			if CurrentRun and CurrentRun.WorldUpgradesAdded then
+				CurrentRun.WorldUpgradesAdded[wu_key] = true
+			end
+		end
+		CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
 		H2AP_CheckLocation(ap_location)
 		H2AP_ShowBossRewardBanner()
-		return base(screen, button)
+		return
 	end
 
 	-- Cauldronsanity: intercept the 86 non-special incantations.
@@ -244,8 +266,16 @@ end)
 -- which base() has just populated, then dedupes via H2AP_HintLocation so each
 -- location is hinted at most once. Uncontested — no other installed mod hooks
 -- GhostAdminDisplayCategory — so this install-once wrap lives here in ready.lua.
+-- Keep the AP-controlled surface-lock recipes brewable until their check fires.
+-- The cauldron classifies "brewed vs offered" from GameState.WorldUpgradesAdded,
+-- which the cure's effect-grant may have set on receive (SurfacePenaltyCure). We
+-- mask that flag to our AP_SurfaceIncantationChecked truth for the build, then
+-- restore it so the granted effect persists. (Also hints visible incantations.)
 modutil.mod.Path.Wrap("GhostAdminDisplayCategory", function(base, screen, button)
+	local settings = H2AP_LoadSettings()
+	local masked = settings and H2AP_MaskSurfaceIncantationsForOffer(settings) or nil
 	base(screen, button)
+	if masked then H2AP_UnmaskSurfaceIncantations(masked) end
 	H2AP_HintCauldronVisible(screen)
 end)
 

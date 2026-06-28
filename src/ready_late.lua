@@ -26,7 +26,7 @@ import 'lib/weapons.lua'
 -- Patch incantation icons + cauldron-visibility gates for the hub screen
 -- before the first SetupMap wrap fires.
 H2AP_PatchIncantationIcons()
-H2AP_PatchIncantationGates()
+H2AP_PatchSurfaceIncantationReveal()
 H2AP_PatchIncantationCosts()
 H2AP_PatchGoalIncantationGate()
 H2AP_PatchFamiliarGates()
@@ -85,7 +85,7 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
 	LoadPackages({ Name = ap_icon_pkg })
 	H2AP_PatchIncantationIcons()
-	H2AP_PatchIncantationGates()
+	H2AP_PatchSurfaceIncantationReveal()
 	H2AP_PatchIncantationCosts()
 	H2AP_PatchFamiliarGates()
 	H2AP_SetupMap()

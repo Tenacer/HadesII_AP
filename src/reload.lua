@@ -36,24 +36,74 @@ function H2AP_PatchIncantationIcons()
 	end
 end
 
--- Append a `PathTrue` requirement to each AP-keyed incantation's
--- GameStateRequirements so the cauldron entry stays hidden until the player
--- receives the AP item (which sets the corresponding TextLinesRecord flag).
--- Idempotent: a sentinel `_ap_cauldron_gate_patched` on each entry prevents
--- double-application across hot-reload / SetupMap calls.
-function H2AP_PatchIncantationGates()
-	if WorldUpgradeData == nil then return end
+-- ── Surface-lock incantation model (effect-on-receive, check-on-brew) ─────────
+-- The two surface-unlock incantations (Permeation of Witching-Wards =
+-- WorldUpgradeAltRunDoor, Unraveling a Fateful Bond = WorldUpgradeSurfacePenaltyCure)
+-- under `lock_surface_incantations` deliver their EFFECT via the received AP item
+-- (items.lua) and fire their LOCATION CHECK when the player brews the recipe
+-- (HandleGhostAdminPurchase in ready.lua). The recipe is revealed by the vanilla
+-- Hermes/Hecate (door) and Moros (penalty cure) story sequences — we deliberately
+-- do NOT gate its cauldron visibility on the AP item.
+--
+-- Unraveling's reveal (Moros' dialog MorosGrantsSurfacePenaltyCure01) needs the
+-- named requirement MorosFirstSurfaceAppearance, whose first clause requires the
+-- live `SurfacePenalty` curse trait on Melinoë. But granting the cure on receive
+-- sets GameState.WorldUpgrades.WorldUpgradeSurfacePenaltyCure — which is exactly
+-- what suppresses that curse trait (EncounterData_Opening) — so a cured player
+-- would never trigger the reveal and could never brew the check. We widen the
+-- first clause to also accept "reached the surface this run" (BiomesReached "N"),
+-- so Moros reveals the recipe whether the player is still cursed or already cured;
+-- the other clauses (MorosSecondAppearance, not-MorosUnlock) are untouched, so a
+-- normal cursed player's behaviour is unchanged.
+--
+-- Re-applied each room because the game reloads NamedRequirementsData; idempotent
+-- via the `_ap_moros_reveal_patched` sentinel (cleared whenever the table is
+-- reloaded). Note the global table is NamedRequirementsData (RequirementsLogic
+-- looks requirements up there by name), even though it lives in RequirementsData.lua.
+function H2AP_PatchSurfaceIncantationReveal()
+	if NamedRequirementsData == nil or NamedRequirementsData._ap_moros_reveal_patched then return end
 	local settings = H2AP_LoadSettings() or {}
-	local keyed = H2AP_KeyedIncantations(settings)
-	for key in pairs(keyed) do
-		local data = WorldUpgradeData[key]
-		if data and not data._ap_cauldron_gate_patched then
-			data.GameStateRequirements = data.GameStateRequirements or {}
-			table.insert(data.GameStateRequirements, {
-				PathTrue = { "GameState", "TextLinesRecord", H2AP_UnlockFlagFor(key) },
-			})
-			data._ap_cauldron_gate_patched = true
+	if settings.lock_surface_incantations ~= 1 then return end
+	-- OrRequirements must sit at the top level of the requirements object (that's
+	-- where IsGameStateEligible evaluates it); the remaining clauses stay as the
+	-- AND array. Net: (cursed OR reached-surface-this-run) AND MorosSecondAppearance
+	-- AND not-MorosUnlock.
+	NamedRequirementsData.MorosFirstSurfaceAppearance = {
+		OrRequirements = {
+			{ { Path = { "CurrentRun", "Hero", "TraitDictionary" }, HasAny = { "SurfacePenalty" } } },
+			{ { Path = { "CurrentRun", "BiomesReached" }, HasAny = { "N" } } },
+		},
+		{ PathTrue = { "GameState", "TextLinesRecord", "MorosSecondAppearance" } },
+		{ PathFalse = { "CurrentRun", "WorldUpgradesAdded", "WorldUpgradeMorosUnlock" } },
+	}
+	NamedRequirementsData._ap_moros_reveal_patched = true
+end
+
+-- The cauldron classifies recipes "offered (brewable) vs done" from
+-- GameState.WorldUpgradesAdded (GhostAdminLogic). For the surface-lock recipes we
+-- instead want "done" to mean "our AP check already fired", independent of
+-- WorldUpgradesAdded (which the cure's effect-grant sets on receive). These two
+-- helpers mask WorldUpgradesAdded to the AP_SurfaceIncantationChecked truth for
+-- the duration of a cauldron category build (see the GhostAdminDisplayCategory
+-- wrap in ready.lua), then restore it so the granted effect persists everywhere
+-- else. H2AP_MaskSurfaceIncantationsForOffer returns a save-list to restore.
+function H2AP_MaskSurfaceIncantationsForOffer(settings)
+	local saved = {}
+	if not (GameState and GameState.WorldUpgradesAdded) then return saved end
+	local checked = GameState.AP_SurfaceIncantationChecked or {}
+	for key in pairs(SURFACE_LOCK_INCANTATION_KEYS) do
+		if H2AP_IsApKeyedIncantation(key, settings) then
+			saved[#saved + 1] = { key = key, orig = GameState.WorldUpgradesAdded[key] }
+			GameState.WorldUpgradesAdded[key] = checked[key] or nil
 		end
+	end
+	return saved
+end
+
+function H2AP_UnmaskSurfaceIncantations(saved)
+	if not (GameState and GameState.WorldUpgradesAdded) then return end
+	for _, e in ipairs(saved) do
+		GameState.WorldUpgradesAdded[e.key] = e.orig
 	end
 end
 

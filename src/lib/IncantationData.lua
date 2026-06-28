@@ -103,17 +103,17 @@ for key, name in pairs(INCANTATION_LOCATIONS) do
 	INCANTATION_KEY_FOR_NAME[name] = key
 end
 
--- ── AP-keyed incantations ────────────────────────────────────────────────────
--- AP-keyed incantations are the small set whose cauldron *visibility* is gated
--- on receiving the corresponding AP item: the entry doesn't appear in the
--- GhostAdmin screen until `GameState.TextLinesRecord[H2AP_UnlockFlagFor(key)]`
--- is set, then brewing applies the vanilla effect AND fires the AP location
--- check. This is a different model from the existing cauldronsanity flow,
--- which intercepts brewing and suppresses the vanilla effect.
---
--- Only the surface-unlock incantations (WorldUpgradeAltRunDoor +
--- WorldUpgradeSurfacePenaltyCure) are AP-keyed — gated by
--- `lock_surface_incantations`, independent of `cauldronsanity`.
+-- ── AP-keyed (surface-lock) incantations ─────────────────────────────────────
+-- The surface-unlock incantations (WorldUpgradeAltRunDoor +
+-- WorldUpgradeSurfacePenaltyCure) are "AP-keyed" under `lock_surface_incantations`
+-- (independent of `cauldronsanity`). Their model: the received AP item delivers
+-- the incantation EFFECT (items.lua), and brewing the recipe fires the AP
+-- location CHECK with the vanilla effect suppressed (ready.lua) — the same
+-- intercept as cauldronsanity, except the recipe is revealed by the vanilla
+-- Hermes/Hecate (door) and Moros (penalty cure) story rather than the AP item.
+-- See reload.lua's H2AP_PatchSurfaceIncantationReveal +
+-- H2AP_MaskSurfaceIncantationsForOffer for the two support pieces that keep the
+-- reveal and the cauldron offer working once the effect is granted early.
 --
 -- The goal incantations (WorldUpgradeTimeStop + WorldUpgradeStormStop) are NOT
 -- AP-keyed: under true_ending they brew via the vanilla cauldron flow, gated
@@ -137,10 +137,6 @@ end
 
 function H2AP_IsGoalIncantation(wu_key)
 	return GOAL_INCANTATION_KEYS[wu_key] == true
-end
-
-function H2AP_UnlockFlagFor(wu_key)
-	return "APUnlock_" .. wu_key
 end
 
 -- Build the runtime set of AP-keyed WorldUpgrade keys based on the current

@@ -27,24 +27,40 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
 		return true
 	end
-	-- Incantation: AP-keyed items (surface lock, goal incantations) only flip
-	-- the unlock TextLinesRecord flag — the cauldron entry then appears for the
-	-- player to brew normally, and brewing applies the vanilla effect + fires
-	-- the AP location check via the HandleGhostAdminPurchase wrap.
-	-- Non-AP-keyed cauldronsanity incantations (the other 86) get the
-	-- WorldUpgrade flag set directly here because the cauldron wrap suppresses
-	-- the vanilla effect — this is the only path that grants the effect.
+	-- Incantation effects. Both surface-lock and cauldronsanity incantations
+	-- deliver their EFFECT from the received AP item here; the matching location
+	-- CHECK fires when the player brews the recipe (HandleGhostAdminPurchase),
+	-- which suppresses the vanilla brew effect.
 	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
 	if wu_key then
 		local settings = H2AP_LoadSettings()
 		if H2AP_IsApKeyedIncantation(wu_key, settings) then
-			local flag = H2AP_UnlockFlagFor(wu_key)
-			GameState.TextLinesRecord = GameState.TextLinesRecord or {}
-			GameState.TextLinesRecord[flag] = true
-			if CurrentRun and CurrentRun.TextLinesRecord then
-				CurrentRun.TextLinesRecord[flag] = true
+			-- Surface-lock incantations: the recipe is revealed by the vanilla
+			-- Hermes/Hecate (door) and Moros (penalty cure) story sequences, so we
+			-- only grant the effect here, never touch the recipe's visibility.
+			--
+			-- AltRunDoor's effect (the surface door) is gated purely on
+			-- GameState.WorldUpgrades, while its Hermes/Hecate story beats are
+			-- PathFalse-WorldUpgradesAdded — so we set ONLY WorldUpgrades and leave
+			-- WorldUpgradesAdded as the player's "actually brewed" record, keeping
+			-- that whole sequence alive.
+			--
+			-- SurfacePenaltyCure's effect spans both flags: the core surface-room
+			-- cure is WorldUpgrades-gated, but the Selene/audio/codex effects are
+			-- WorldUpgradesAdded-gated, so we grant the full set for a complete cure.
+			-- Its reveal no longer needs the curse trait (H2AP_PatchSurfaceIncantationReveal),
+			-- and the cauldron still offers it for the check via the
+			-- GhostAdminDisplayCategory mask in ready.lua.
+			GameState.WorldUpgrades[wu_key]       = true
+			GameState.WorldUpgradesViewed[wu_key] = true
+			if wu_key == "WorldUpgradeSurfacePenaltyCure" then
+				GameState.WorldUpgradesAdded[wu_key]    = true
+				GameState.WorldUpgradesRevealed[wu_key] = true
+				if CurrentRun and CurrentRun.WorldUpgradesAdded then
+					CurrentRun.WorldUpgradesAdded[wu_key] = true
+				end
 			end
-			print("[HadesII_AP] Incantation cauldron-unlocked: " .. item_name)
+			print("[HadesII_AP] Incantation effect granted: " .. item_name)
 			return true
 		end
 		-- Cauldronsanity 86: apply effect directly (vanilla brew is suppressed).
