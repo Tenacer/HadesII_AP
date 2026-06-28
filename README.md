@@ -1,10 +1,17 @@
 # HadesII_AP
-Hades II mod to enable its AP World implementation.
+Hades II mod to enable its Archipelago implementation.
 
 ## Features
 
-It allows spawning items, region locking and sending deaths to the client.
+For a full rundown of what the Archipelago randomizer does, check out the documentation at the
+[Archipelago's repo](https://github.com/Tenacer/Archipelago-HadesII).
 
 ## Install
 
-Not ready for installation yet.
+Through [r2modman](https://thunderstore.io/c/hades-ii/p/ebkr/r2modman/), which is the standard
+mod loader for Hades II mods. 
+
+## Disclaimer
+
+AI coding agents have been used extensively to assist the development of this mod (Claude Code). 
+No AI generated art was used to make the mod.
