@@ -39,6 +39,29 @@ local ROUTE_FOR_BIOME = {
 	N = "surface",    O = "surface",    P = "surface",    Q = "surface",
 }
 
+-- Encounter types that do NOT award room-clear score. Two groups:
+--   • Non-combat utility rooms — shops, fountains, story beats, openings, empties
+--     (all inherit EncounterData "NonCombat").
+--   • Optional challenge side-rooms triggered by a challenge switch: PerfectClear
+--     (take no damage), TimeChallenge (beat the clock) and EliteChallenge (forced
+--     elite wave). They're off the main path and shouldn't pad the score.
+-- Everything else counts: normal combat (Default / Miniboss / ArachneCombat), all
+-- boss rooms (Boss — the mid-run six plus the final Chronos/Typhon rooms, which
+-- now credit score from the boss branch), and the god-choice Devotion rooms.
+local SCORE_EXCLUDED_ENCOUNTER_TYPES = {
+	NonCombat      = true,
+	PerfectClear   = true,
+	TimeChallenge  = true,
+	EliteChallenge = true,
+}
+
+local function encounter_awards_score(encounter)
+	if not encounter then return false end
+	local etype = encounter.EncounterType
+	if etype == nil then return false end
+	return not SCORE_EXCLUDED_ENCOUNTER_TYPES[etype]
+end
+
 -- ── Room-based location systems (room_based / room_weapon_based) ───────────────
 -- Per-route max run depth. MUST match the apworld's UNDERWORLD_ROOM_MAX /
 -- SURFACE_ROOM_MAX (Locations.py, derived from the *_BIOME_BOUNDS). Underworld is
@@ -440,6 +463,88 @@ function H2AP_OnRoomExitsUnlocked(currentRoom)
 	if dirty then H2AP_SaveState() end
 end
 
+-- Credit room-clear score for one cleared room under the score_based system.
+-- Factored out so regular rooms AND the final-boss rooms (Chronos/Typhon, which
+-- take the boss branch in H2AP_OnRoomCleared) award score identically. No-op
+-- outside the score system or for non-scoring encounters (see
+-- encounter_awards_score) — so it's safe to call unconditionally on a cleared room.
+local function credit_room_score(currentRoom, currentEncounter)
+	local biome  = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
+	local route  = ROUTE_FOR_BIOME[biome] or "underworld"
+	local system = H2AP_LocationSystem()
+
+	-- Room-based systems count depths on DoUnlockRoomExits (fires for ALL rooms,
+	-- combat or not — see H2AP_OnRoomExitsUnlocked), NOT here: OnAllEnemiesDead
+	-- skips non-combat rooms (shops/story/forced-shop PreBoss), which would leave
+	-- those depths' checks permanently unobtainable.
+	if system ~= "score" then return end
+
+	-- Skip rooms that shouldn't award score — non-combat utility chambers (shops,
+	-- story, fountains, empties) and optional challenge side-rooms — which still
+	-- reach OnAllEnemiesDead and would otherwise tick the score up.
+	if not encounter_awards_score(currentEncounter) then
+		return
+	end
+
+	-- score_based: accumulate score → trigger score checks.
+	local state    = H2AP_LoadState()
+	local settings = H2AP_LoadSettings()
+
+	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
+	local max_checks = settings.score_rewards_amount or 150
+	local separate = H2AP_ScoreSeparate(settings)
+
+	-- Credit the score to the route this room belongs to (default underworld for
+	-- any unrecognized prefix). Each route is budgeted independently.
+	local route_field = "score_" .. route
+	state[route_field] = (state[route_field] or 0) + points
+	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
+	-- Separate mode: name the route in the toast so the player sees which score
+	-- they're building. Combined mode shows the running total. Either way include
+	-- the points remaining until the next check unlocks (nil once capped).
+	if separate then
+		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
+		local route_budget = (route == "surface") and surface_budget or underworld_budget
+		local to_next = H2AP_PointsToNextScoreCheck(state[route_field], route_budget)
+		H2AP_NotifyScore(points, state[route_field], ROUTE_LABEL[route], to_next)
+	else
+		local to_next = H2AP_PointsToNextScoreCheck(state.score, max_checks)
+		H2AP_NotifyScore(points, state.score, nil, to_next)
+	end
+
+	local prev_under   = state.checks_sent_underworld or 0
+	local prev_surface = state.checks_sent_surface or 0
+	local under_checks, surface_checks = H2AP_ScoreChecksSent(state, settings, max_checks)
+	state.checks_sent_underworld = under_checks
+	state.checks_sent_surface    = surface_checks
+
+	-- Separate mode: only the cleared room's route can have gained a check, so
+	-- fire that route's milestone against its own budget.
+	if separate then
+		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
+		if route == "underworld" and under_checks > prev_under then
+			H2AP_NotifyMilestone(under_checks, underworld_budget, ROUTE_LABEL.underworld)
+		elseif route == "surface" and surface_checks > prev_surface then
+			H2AP_NotifyMilestone(surface_checks, surface_budget, ROUTE_LABEL.surface)
+		end
+	end
+
+	local new_checks = math.min(under_checks + surface_checks, max_checks)
+	if new_checks > state.checks_sent then
+		state.checks_sent = new_checks
+		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
+		if not separate then
+			H2AP_NotifyMilestone(new_checks, max_checks, nil)
+		end
+	end
+
+	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. "/" .. route .. ") → "
+		.. state.score .. " total (U:" .. (state.score_underworld or 0)
+		.. " S:" .. (state.score_surface or 0) .. ")")
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
+end
+
 function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	if not currentRoom then return end
 
@@ -520,75 +625,15 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 			CurrentRun.CurrentRoom.SkipLoadNextMap  = true
 			print("[HadesII_AP] Boss cleared — exit redirected to EndEarlyAccessPresentation")
 		end
+
+		-- Final-boss rooms are full combat Encounters, so they award room-clear
+		-- score like any other room — in both goal modes. (No-op outside the score
+		-- system.) Done here because the boss branch returns before the regular path.
+		credit_room_score(currentRoom, currentEncounter)
 		return
 	end
 
-	-- Regular rooms. Dispatch on the active location system.
-	local biome  = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
-	local route  = ROUTE_FOR_BIOME[biome] or "underworld"
-	local system = H2AP_LocationSystem()
-
-	-- Room-based systems count depths on DoUnlockRoomExits (fires for ALL rooms,
-	-- combat or not — see H2AP_OnRoomExitsUnlocked), NOT here: OnAllEnemiesDead
-	-- skips non-combat rooms (shops/story/forced-shop PreBoss), which would leave
-	-- those depths' checks permanently unobtainable.
-	if system ~= "score" then return end
-
-	-- score_based: accumulate score → trigger score checks.
-	local state    = H2AP_LoadState()
-	local settings = H2AP_LoadSettings()
-
-	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
-	local max_checks = settings.score_rewards_amount or 150
-	local separate = H2AP_ScoreSeparate(settings)
-
-	-- Credit the score to the route this room belongs to (default underworld for
-	-- any unrecognized prefix). Each route is budgeted independently.
-	local route_field = "score_" .. route
-	state[route_field] = (state[route_field] or 0) + points
-	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
-	-- Separate mode: name the route in the toast so the player sees which score
-	-- they're building. Combined mode shows the running total. Either way include
-	-- the points remaining until the next check unlocks (nil once capped).
-	if separate then
-		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
-		local route_budget = (route == "surface") and surface_budget or underworld_budget
-		local to_next = H2AP_PointsToNextScoreCheck(state[route_field], route_budget)
-		H2AP_NotifyScore(points, state[route_field], ROUTE_LABEL[route], to_next)
-	else
-		local to_next = H2AP_PointsToNextScoreCheck(state.score, max_checks)
-		H2AP_NotifyScore(points, state.score, nil, to_next)
-	end
-
-	local prev_under   = state.checks_sent_underworld or 0
-	local prev_surface = state.checks_sent_surface or 0
-	local under_checks, surface_checks = H2AP_ScoreChecksSent(state, settings, max_checks)
-	state.checks_sent_underworld = under_checks
-	state.checks_sent_surface    = surface_checks
-
-	-- Separate mode: only the cleared room's route can have gained a check, so
-	-- fire that route's milestone against its own budget.
-	if separate then
-		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
-		if route == "underworld" and under_checks > prev_under then
-			H2AP_NotifyMilestone(under_checks, underworld_budget, ROUTE_LABEL.underworld)
-		elseif route == "surface" and surface_checks > prev_surface then
-			H2AP_NotifyMilestone(surface_checks, surface_budget, ROUTE_LABEL.surface)
-		end
-	end
-
-	local new_checks = math.min(under_checks + surface_checks, max_checks)
-	if new_checks > state.checks_sent then
-		state.checks_sent = new_checks
-		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
-		if not separate then
-			H2AP_NotifyMilestone(new_checks, max_checks, nil)
-		end
-	end
-
-	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. "/" .. route .. ") → "
-		.. state.score .. " total (U:" .. (state.score_underworld or 0)
-		.. " S:" .. (state.score_surface or 0) .. ")")
-	H2AP_SaveState()
-	H2AP_FlushOutbox()
+	-- Regular rooms: credit room-clear score (no-op outside the score system or for
+	-- non-scoring encounters).
+	credit_room_score(currentRoom, currentEncounter)
 end
