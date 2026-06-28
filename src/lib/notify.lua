@@ -228,13 +228,21 @@ function H2AP_NotifyReceived(item)
 	H2AP_Notify(text, COLOR_RECEIVED)
 end
 
--- Score ticks fire every cleared room — no sound to avoid spam.
-function H2AP_NotifyScore(total_score, delta)
-	H2AP_Notify("+" .. tostring(delta) .. " pts. Total score: " .. tostring(total_score),
+-- Score ticks fire every cleared room — no sound to avoid spam. `route_label`
+-- ("Underworld"/"Surface") is shown in separate split mode so the player knows
+-- which route's score they're building; nil → combined mode shows the total.
+function H2AP_NotifyScore(delta, total, route_label)
+	local route = route_label and (route_label .. " ") or ""
+	local label = route_label and (route_label .. " score") or "Total score"
+	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total),
 		COLOR_SCORE, nil, "")
 end
 
-function H2AP_NotifyMilestone(checks_sent, max_checks)
-	H2AP_Notify("Score check unlocked (" .. checks_sent .. "/" .. max_checks .. ")",
+-- `route_label` ("Underworld"/"Surface") names the route whose check unlocked in
+-- separate split mode; nil → combined mode reads "Score check". `budget` is the
+-- pool the count is measured against (the route's share, or the full pool).
+function H2AP_NotifyMilestone(checks_sent, budget, route_label)
+	local prefix = route_label and (route_label .. " score check") or "Score check"
+	H2AP_Notify(prefix .. " unlocked (" .. checks_sent .. "/" .. budget .. ")",
 		COLOR_MSTONE)
 end

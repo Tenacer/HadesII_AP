@@ -117,15 +117,30 @@ end
 --     all-underworld player therefore tops out at the underworld share and must
 --     play surface for the remaining checks (and vice versa). The budget split
 --     here MUST match Locations.score_check_split on the apworld side.
-local function H2AP_ScoreChecksSent(state, settings, max_checks)
+-- True when the score-check budget is split per route (separate mode).
+local function H2AP_ScoreSeparate(settings)
 	local mode = settings.score_split_mode
-	if not (mode == 1 or mode == "separate") then
-		return checks_for_score(state.score or 0), 0
+	return mode == 1 or mode == "separate"
+end
+
+-- Per-route check budgets, returned as (underworld_budget, surface_budget).
+-- Combined mode puts the whole budget on the sole pool → (max_checks, 0).
+-- MUST match Locations.score_check_split on the apworld side.
+local function H2AP_ScoreBudgets(settings, max_checks)
+	if not H2AP_ScoreSeparate(settings) then
+		return max_checks, 0
 	end
 	local ratio = settings.surface_score_ratio
 	if type(ratio) ~= "number" then ratio = 40 end
-	local surface_budget    = math.floor(max_checks * ratio / 100)
-	local underworld_budget = max_checks - surface_budget
+	local surface_budget = math.floor(max_checks * ratio / 100)
+	return max_checks - surface_budget, surface_budget
+end
+
+local function H2AP_ScoreChecksSent(state, settings, max_checks)
+	if not H2AP_ScoreSeparate(settings) then
+		return checks_for_score(state.score or 0), 0
+	end
+	local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
 	local under_checks   = math.min(checks_for_score(state.score_underworld or 0), underworld_budget)
 	local surface_checks = math.min(checks_for_score(state.score_surface or 0),    surface_budget)
 	return under_checks, surface_checks
@@ -471,22 +486,45 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 
 	local points   = BIOME_POINTS[biome] or config.points_per_room or 1
 	local max_checks = settings.score_rewards_amount or 150
+	local separate = H2AP_ScoreSeparate(settings)
 
 	-- Credit the score to the route this room belongs to (default underworld for
 	-- any unrecognized prefix). Each route is budgeted independently.
 	local route_field = "score_" .. route
 	state[route_field] = (state[route_field] or 0) + points
 	state.score = (state.score_underworld or 0) + (state.score_surface or 0)
-	H2AP_NotifyScore(state.score, points)
+	-- Separate mode: name the route in the toast so the player sees which score
+	-- they're building. Combined mode shows the running total.
+	if separate then
+		H2AP_NotifyScore(points, state[route_field], ROUTE_LABEL[route])
+	else
+		H2AP_NotifyScore(points, state.score, nil)
+	end
 
+	local prev_under   = state.checks_sent_underworld or 0
+	local prev_surface = state.checks_sent_surface or 0
 	local under_checks, surface_checks = H2AP_ScoreChecksSent(state, settings, max_checks)
 	state.checks_sent_underworld = under_checks
 	state.checks_sent_surface    = surface_checks
+
+	-- Separate mode: only the cleared room's route can have gained a check, so
+	-- fire that route's milestone against its own budget.
+	if separate then
+		local underworld_budget, surface_budget = H2AP_ScoreBudgets(settings, max_checks)
+		if route == "underworld" and under_checks > prev_under then
+			H2AP_NotifyMilestone(under_checks, underworld_budget, ROUTE_LABEL.underworld)
+		elseif route == "surface" and surface_checks > prev_surface then
+			H2AP_NotifyMilestone(surface_checks, surface_budget, ROUTE_LABEL.surface)
+		end
+	end
+
 	local new_checks = math.min(under_checks + surface_checks, max_checks)
 	if new_checks > state.checks_sent then
 		state.checks_sent = new_checks
 		print("[HadesII_AP] Score checks unlocked: " .. state.checks_sent)
-		H2AP_NotifyMilestone(state.checks_sent, max_checks)
+		if not separate then
+			H2AP_NotifyMilestone(new_checks, max_checks, nil)
+		end
 	end
 
 	print("[HadesII_AP] +" .. points .. " pts (" .. biome .. "/" .. route .. ") → "
