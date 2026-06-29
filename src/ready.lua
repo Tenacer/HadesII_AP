@@ -27,6 +27,7 @@ import 'lib/familiar.lua'
 import 'lib/traphelper.lua'
 import 'lib/broker.lua'
 import 'lib/items.lua'
+import 'lib/bossreward.lua'
 import 'lib/score.lua'
 import 'lib/death.lua'
 import 'lib/inbox.lua'
@@ -54,6 +55,12 @@ end)
 local traitfile = rom.path.combine(rom.paths.Content, 'Game/Text/en/TraitText.en.sjson')
 sjson.hook(traitfile, function(data)
 	return sjson_TraitText(data)
+end)
+
+-- Register the AP-logo reward-drop animation so SpawnRoomReward visuals can use it.
+local animfile = rom.path.combine(rom.paths.Content, 'Game/Animations/Items_General_VFX.sjson')
+sjson.hook(animfile, function(data)
+	return sjson_ItemAnimations(data)
 end)
 
 -- ── Debug keybind ─────────────────────────────────────────────────────────────
