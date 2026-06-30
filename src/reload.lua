@@ -212,7 +212,7 @@ function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 	local vanilla_name = entry.DisplayName
 	local vanilla_desc = entry.Description
 	local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
-	local new_desc = "Archipelago location check for " .. opener .. ".\nComplete this in-game to send a check to the Archipelago server."
+	local new_desc = "Archipelago location check for " .. opener .. "."
 	if vanilla_desc and vanilla_desc ~= "" then
 		new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
 	end
@@ -259,11 +259,11 @@ function sjson_HelpText(data)
 				H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 			else
 				local base_id = id:match("^(.-)_Flavor$")
+				local new_desc = ""
 				if base_id and incantation_location_for(base_id) then
 					local vanilla_flavor = entry.Description
-					local new_desc = "What you receive in exchange is determined by the Archipelago multiworld randomizer."
 					if vanilla_flavor and vanilla_flavor ~= "" then
-						new_desc = new_desc .. "\n\nOriginal: " .. vanilla_flavor
+						new_desc = "\n\nOriginal: " .. vanilla_flavor
 					end
 					entry.Description = new_desc
 				end
