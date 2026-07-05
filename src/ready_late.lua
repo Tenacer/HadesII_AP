@@ -35,32 +35,29 @@ H2AP_FlushOutbox()
 
 -- ── GiftData fix ──────────────────────────────────────────────────────────────
 
--- Clear GameStateRequirements from all GiftData gift-level entries so that AP can
--- trigger keepsake location checks via gifting without needing specific NPC dialogue
--- to have happened first. Runs after all mods have populated GiftData.
+-- Replace the dialogue prerequisites on AP-mapped keepsake gift-levels with a guard
+-- so AP can trigger keepsake location checks via gifting without needing specific
+-- NPC dialogue to have happened first. Runs after all mods have populated GiftData.
 --
--- Keepsake gift-levels get a guard instead of an empty requirement: they stay
--- eligible only until GameState.AP_KeepsakeChecked[gift] is set (the moment the AP
--- check fires, see ready.lua). After that GiftLogic skips the level, so
--- PlayerReceivedGiftPresentation is no longer re-called — and the AP banner no longer
--- re-shows — every time the player gifts that NPC again. The guard deliberately keys
--- off our own AP_KeepsakeChecked flag, NOT GiftPresentation, so the keepsake stays
--- "unowned" for bounty/objective/incantation requirements until AP delivers it.
--- (When keepsakesanity is off, AP_KeepsakeChecked is never set, so the guard always
--- passes and behaves exactly like the cleared `{}` requirement.)
+-- The keepsake gift-level stays eligible only until GameState.AP_KeepsakeChecked[gift]
+-- is set (the moment the AP check fires, see ready.lua). After that GiftLogic skips
+-- the level, so PlayerReceivedGiftPresentation is no longer re-called — and the AP
+-- banner no longer re-shows — every time the player gifts that NPC again. The guard
+-- deliberately keys off our own AP_KeepsakeChecked flag, NOT GiftPresentation, so the
+-- keepsake stays "unowned" for bounty/objective/incantation requirements until AP
+-- delivers it. (When keepsakesanity is off, AP_KeepsakeChecked is never set, so the
+-- guard always passes and the keepsake is giftable immediately.)
+--
+-- Unmapped gifts (the three post-ending keepsakes) keep their vanilla requirements,
+-- e.g. Hades declines gifts until the True Ending.
 for npcName, npcData in pairs(GiftData) do
 	if type(npcData) == "table" then
 		for i = 1, #npcData do
 			local entry = npcData[i]
-			if entry then
-				local gift = entry.Gift
-				if gift and KEEPSAKE_LOCATION_FOR_GIFT[gift] then
-					entry.GameStateRequirements = {
-						{ PathFalse = { "GameState", "AP_KeepsakeChecked", gift } },
-					}
-				elseif entry.GameStateRequirements then
-					entry.GameStateRequirements = {}
-				end
+			if entry and entry.Gift and KEEPSAKE_LOCATION_FOR_GIFT[entry.Gift] then
+				entry.GameStateRequirements = {
+					{ PathFalse = { "GameState", "AP_KeepsakeChecked", entry.Gift } },
+				}
 			end
 		end
 	end

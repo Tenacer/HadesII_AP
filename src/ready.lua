@@ -249,8 +249,8 @@ end)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
 
--- ready_late.lua clears all GiftData.GameStateRequirements so the player can
--- gift any NPC without story prerequisites. The side effect is that the keepsake
+-- ready_late.lua replaces the GiftData.GameStateRequirements of AP-mapped keepsakes
+-- so the player can gift those NPCs without story prerequisites. The side effect is that the keepsake
 -- rack screen uses those same (now-empty) requirements to compute Unlocked, so
 -- every keepsake appears available. Override Unlocked here with a direct
 -- GiftPresentation lookup — the same field GiftLogic and H2AP_GiveItem both write.
