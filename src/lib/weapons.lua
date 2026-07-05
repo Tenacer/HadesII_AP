@@ -2,18 +2,9 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Starting weapon enforcement ───────────────────────────────────────────────
--- Ensures the hero starts with the weapon configured in AP slot data.
--- Two complementary approaches cover every case:
---   1. HeroData.DefaultWeapon mutation — used by CreateNewHero when prevRun == nil
---      (truly fresh save). Safe to do here because HeroData is populated by the
---      time this file is imported (game scripts load before on_ready fires).
---   2. Direct CreateNewHero replacement — intercepts the prevRun != nil path so
---      that existing saves that already have the staff also get corrected.
---      _ap_orig_CreateNewHero is only captured once; the guard prevents hot-reloads
---      from stacking additional layers.
+-- Ensures the hero starts with the AP-configured weapon via HeroData.DefaultWeapon (fresh saves) plus a CreateNewHero replacement (existing saves).
 
--- Maps initial_weapon slot data value to internal weapon name.
--- Order matches Options.py: Staff=0, Daggers=1, Torches=2, Axe=3, Skull=4, Coat=5
+-- Maps initial_weapon slot data value to internal weapon name (order matches Options.py).
 AP_STARTING_WEAPONS = {
 	[0] = "WeaponStaffSwing",
 	[1] = "WeaponDagger",
@@ -33,8 +24,7 @@ WEAPON_LOCATIONS = {
 	WeaponSuit       = "Coat Weapon Unlock Location",
 }
 
--- Game internal weapon name → AP "<Weapon> Clear" location name. Fired the
--- first time a final boss is defeated with that weapon (weapons-goal tracking).
+-- Game internal weapon name → AP "<Weapon> Clear" location name (fired on that weapon's first final-boss clear).
 WEAPON_CLEAR_LOCATIONS = {
 	WeaponStaffSwing = "Staff Weapon Clear",
 	WeaponDagger     = "Daggers Weapon Clear",
@@ -44,9 +34,7 @@ WEAPON_CLEAR_LOCATIONS = {
 	WeaponSuit       = "Coat Weapon Clear",
 }
 
--- Game internal weapon name → AP-facing short token, used to suffix
--- room_weapon_based location names ("Clear Underworld Room NN <token>"). MUST
--- match ROOM_WEAPON_TOKENS in the apworld's Locations.py.
+-- Weapon short tokens for room_weapon_based location names; MUST match ROOM_WEAPON_TOKENS in Locations.py.
 WEAPON_SHORT = {
 	WeaponStaffSwing = "Staff",
 	WeaponDagger     = "Daggers",
@@ -56,9 +44,7 @@ WEAPON_SHORT = {
 	WeaponSuit       = "Coat",
 }
 
--- AP item name → game internal weapon name (for H2AP_GiveItem).
--- Keys must match the bare item names from the apworld's items.csv exactly (no
--- " Item" suffix — that suffix only exists on the location names).
+-- AP item name → game internal weapon name (keys match items.csv exactly).
 WEAPON_ITEM_TO_NAME = {
 	["Staff Weapon Unlock"]   = "WeaponStaffSwing",
 	["Daggers Weapon Unlock"] = "WeaponDagger",
@@ -68,8 +54,7 @@ WEAPON_ITEM_TO_NAME = {
 	["Coat Weapon Unlock"]    = "WeaponSuit",
 }
 
--- Game internal aspect name → AP location name (third aspect entry per weapon
--- in WeaponShopData; gated by CharacterGrantsHiddenAspect01 text-line records).
+-- Game internal aspect name → AP location name.
 HIDDEN_ASPECT_LOCATIONS = {
 	StaffRaiseDeadAspect = "Staff Weapon Anubis Aspect Unlock Location",
 	DaggerTripleAspect   = "Daggers Weapon Morrigan Aspect Unlock Location",
@@ -79,9 +64,7 @@ HIDDEN_ASPECT_LOCATIONS = {
 	SuitComboAspect      = "Coat Weapon Shiva Aspect Unlock Location",
 }
 
--- AP item name → game internal aspect name (for H2AP_GiveItem).
--- Keys are the bare apworld item names (items.csv) — these carry neither the
--- weapon prefix nor the " Item" suffix that the location names use.
+-- AP item name → game internal aspect name (keys match items.csv exactly).
 HIDDEN_ASPECT_ITEM_TO_NAME = {
 	["Anubis Aspect Unlock"]   = "StaffRaiseDeadAspect",
 	["Morrigan Aspect Unlock"] = "DaggerTripleAspect",
@@ -106,10 +89,7 @@ function H2AP_InitWeaponState()
 	local t = s and AP_STARTING_WEAPONS[s.initial_weapon or 0]
 	if not t or t == "WeaponStaffSwing" then return end
 
-	-- Make staff purchasable with 1 silver so it appears as a buyable item
-	-- rather than the free default. Done here (not at load time) to avoid
-	-- mutating game data tables during Lua initialisation, which triggers
-	-- the App::Reset GC crash.
+	-- Make staff purchasable with 1 silver; done here (not at load time) to avoid the App::Reset GC crash.
 	if WeaponShopItemData and WeaponShopItemData["WeaponStaffSwing"] then
 		WeaponShopItemData["WeaponStaffSwing"].Cost = { OreFSilver = 1 }
 		WeaponShopItemData["WeaponStaffSwing"].OnActivateFunctionName = "ActivateWeaponKit"

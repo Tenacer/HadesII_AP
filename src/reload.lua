@@ -1,24 +1,14 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- Library modules are imported from ready.lua / ready_late.lua, not here:
--- importing from reload.lua re-runs the file on every hot-reload, which is
--- wasted work for pure-definition modules and unsafe for the install-type ones.
--- What remains in this file is intentionally hot-reloadable: the AP-icon /
--- text-label helpers and the SJSON hook handlers, so their cosmetic logic can be
--- tweaked at runtime without restarting the game.
+-- Hot-reloadable AP-icon / text-label helpers and SJSON hook handlers; library modules import from ready.lua / ready_late.lua instead.
 
 -- ── AP icon ───────────────────────────────────────────────────────────────────
 
 -- Animation name for our custom AP logo, packed in Tenacer_AP-HadesII_AP.pkg.
 AP_ICON_ANIM = _PLUGIN.guid .. "\\ap_icon"
 
--- Replace the Icon field on every AP-controlled incantation so the cauldron
--- screen shows the Archipelago logo instead of per-spell artwork. The set of
--- AP-controlled keys depends on settings:
---  • cauldronsanity → the 86 non-surface, non-goal incantations
---  • lock_surface_incantations → the two surface-unlock incantations
---  • true_ending → the two goal incantations
+-- Show the Archipelago logo instead of per-spell artwork on every AP-controlled incantation.
 function H2AP_PatchIncantationIcons()
 	if WorldUpgradeData == nil then return end
 	local settings = H2AP_LoadSettings() or {}
@@ -37,37 +27,13 @@ function H2AP_PatchIncantationIcons()
 end
 
 -- ── Surface-lock incantation model (effect-on-receive, check-on-brew) ─────────
--- The two surface-unlock incantations (Permeation of Witching-Wards =
--- WorldUpgradeAltRunDoor, Unraveling a Fateful Bond = WorldUpgradeSurfacePenaltyCure)
--- under `lock_surface_incantations` deliver their EFFECT via the received AP item
--- (items.lua) and fire their LOCATION CHECK when the player brews the recipe
--- (HandleGhostAdminPurchase in ready.lua). The recipe is revealed by the vanilla
--- Hermes/Hecate (door) and Moros (penalty cure) story sequences — we deliberately
--- do NOT gate its cauldron visibility on the AP item.
---
--- Unraveling's reveal (Moros' dialog MorosGrantsSurfacePenaltyCure01) needs the
--- named requirement MorosFirstSurfaceAppearance, whose first clause requires the
--- live `SurfacePenalty` curse trait on Melinoë. But granting the cure on receive
--- sets GameState.WorldUpgrades.WorldUpgradeSurfacePenaltyCure — which is exactly
--- what suppresses that curse trait (EncounterData_Opening) — so a cured player
--- would never trigger the reveal and could never brew the check. We widen the
--- first clause to also accept "reached the surface this run" (BiomesReached "N"),
--- so Moros reveals the recipe whether the player is still cursed or already cured;
--- the other clauses (MorosSecondAppearance, not-MorosUnlock) are untouched, so a
--- normal cursed player's behaviour is unchanged.
---
--- Re-applied each room because the game reloads NamedRequirementsData; idempotent
--- via the `_ap_moros_reveal_patched` sentinel (cleared whenever the table is
--- reloaded). Note the global table is NamedRequirementsData (RequirementsLogic
--- looks requirements up there by name), even though it lives in RequirementsData.lua.
+
+-- Widen Moros' reveal requirement so a player already cured by the AP item can still trigger the Unraveling recipe reveal; re-applied each room since the game reloads NamedRequirementsData.
 function H2AP_PatchSurfaceIncantationReveal()
 	if NamedRequirementsData == nil or NamedRequirementsData._ap_moros_reveal_patched then return end
 	local settings = H2AP_LoadSettings() or {}
 	if settings.lock_surface_incantations ~= 1 then return end
-	-- OrRequirements must sit at the top level of the requirements object (that's
-	-- where IsGameStateEligible evaluates it); the remaining clauses stay as the
-	-- AND array. Net: (cursed OR reached-surface-this-run) AND MorosSecondAppearance
-	-- AND not-MorosUnlock.
+	-- OrRequirements must sit at the top level; net effect is (cursed OR reached-surface-this-run) AND the untouched clauses.
 	NamedRequirementsData.MorosFirstSurfaceAppearance = {
 		OrRequirements = {
 			{ { Path = { "CurrentRun", "Hero", "TraitDictionary" }, HasAny = { "SurfacePenalty" } } },
@@ -79,14 +45,7 @@ function H2AP_PatchSurfaceIncantationReveal()
 	NamedRequirementsData._ap_moros_reveal_patched = true
 end
 
--- The cauldron classifies recipes "offered (brewable) vs done" from
--- GameState.WorldUpgradesAdded (GhostAdminLogic). For the surface-lock recipes we
--- instead want "done" to mean "our AP check already fired", independent of
--- WorldUpgradesAdded (which the cure's effect-grant sets on receive). These two
--- helpers mask WorldUpgradesAdded to the AP_SurfaceIncantationChecked truth for
--- the duration of a cauldron category build (see the GhostAdminDisplayCategory
--- wrap in ready.lua), then restore it so the granted effect persists everywhere
--- else. H2AP_MaskSurfaceIncantationsForOffer returns a save-list to restore.
+-- Temporarily mask WorldUpgradesAdded to the AP-checked truth while the cauldron builds its offer list; returns a save-list for the unmask.
 function H2AP_MaskSurfaceIncantationsForOffer(settings)
 	local saved = {}
 	if not (GameState and GameState.WorldUpgradesAdded) then return saved end
@@ -107,11 +66,7 @@ function H2AP_UnmaskSurfaceIncantations(saved)
 	end
 end
 
--- Rewrite the brewing costs of the two True Ending goal incantations so they
--- match the per-seed thresholds. Vanilla costs (8 total Z-Sand, 4 V-Lens) would
--- consume the entire item pool — patching to the threshold leaves the rest
--- free for Arcana upgrades. Gigaros + Entropy stay at 1× each.
--- Idempotent via `_ap_cost_patched` sentinel.
+-- Rewrite the goal incantations' brewing costs to match the per-seed thresholds.
 function H2AP_PatchIncantationCosts()
 	if WorldUpgradeData == nil then return end
 	local settings = H2AP_LoadSettings() or {}
@@ -131,8 +86,6 @@ function H2AP_PatchIncantationCosts()
 end
 
 -- Show the AP logo banner when a keepsake gifting location check fires.
--- Mirrors PlayerReceivedGiftPresentation's sound/voice/color-grading but
--- uses the AP logo and gift-style banner animations instead of the vanilla keepsake icon.
 function H2AP_ShowKeepsakeCheckBanner(npc)
 	thread(function()
 		AdjustColorGrading({ Name = "Mythmaker", Duration = 0.66 })
@@ -165,7 +118,6 @@ function H2AP_ShowKeepsakeCheckBanner(npc)
 end
 
 -- Show the AP logo banner when a boss reward location check fires.
--- Uses the same InfoBanner presentation as the cauldron "AP Check Sent" popup.
 function H2AP_ShowBossRewardBanner()
 	thread(function()
 		DisplayInfoBanner(nil, {
@@ -194,12 +146,7 @@ function sjson_ShellText(data)
 	end
 end
 
--- Shared: rewrite a text entry's DisplayName/Description to advertise the AP item
--- placed at `ap_location` (scouted into ap_location_items.json), falling back to a
--- generic "AP Location Check" before LocationScouts has run. Preserves the vanilla
--- name/description so the player still sees what the check is attached to
--- (per feedback_ap_helptext_preserve_vanilla). Used by both the HelpText hook
--- (incantations / prophecies) and the TraitText hook (weapons / tools / aspects).
+-- Rewrite a text entry to advertise the scouted AP item at `ap_location`, preserving the vanilla name/description.
 function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 	local item_entry = location_items[ap_location]
 	local display = "AP Location Check"
@@ -224,9 +171,7 @@ function sjson_HelpText(data)
 	-- Inject the "AP Check Sent" banner title used by the cauldron hook.
 	data.Texts[#data.Texts + 1] = { Id = "APCheckSent", DisplayName = "AP Check Sent" }
 
-	-- Replace incantation / Fated List Quest entries with AP info when their
-	-- respective sanity option is on. Weapon/tool/aspect labels live in
-	-- TraitText.en.sjson, NOT here, so those are handled by sjson_TraitText.
+	-- Replace incantation / prophecy entries with AP info when their sanity option is on (weapon/tool/aspect labels live in TraitText).
 	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1
 	local do_fate = settings.fatesanity == 1
@@ -236,10 +181,7 @@ function sjson_HelpText(data)
 
 	local location_items = H2AP_ReadLocationItems() or {}
 
-	-- Resolve an incantation key to the AP location name it represents, only
-	-- when that key is AP-controlled in the current settings. The 86
-	-- cauldronsanity keys are owned by cauldronsanity; the surface 2 and goal 2
-	-- are owned by their respective toggles regardless of cauldronsanity.
+	-- Resolve an incantation key to its AP location name, only when AP-controlled under the current settings.
 	local function incantation_location_for(id)
 		if keyed[id] then return INCANTATION_LOCATIONS[id] end
 		if do_cauldron
@@ -272,14 +214,7 @@ function sjson_HelpText(data)
 	end
 end
 
--- WeaponShop slot labels for weapons / tools / hidden aspects. Their DisplayNames
--- live in TraitText.en.sjson (the shop renders `item.HelpTextId or item.Name` as a
--- text Id via auto-lookup, and these entries' Ids equal their internal names — the
--- *_LOCATIONS keys). HelpText.en.sjson has no such entries, which is why these must
--- be patched here rather than in sjson_HelpText.
--- initial_weapon slot value → internal weapon name. Kept local (not the
--- AP_STARTING_WEAPONS from lib/weapons.lua) because the SJSON hooks can fire
--- before on_ready_late imports that module. Order matches Options.py.
+-- initial_weapon slot value → internal weapon name; kept local because the SJSON hooks can fire before lib/weapons.lua loads.
 local STARTING_WEAPON_NAMES = {
 	[0] = "WeaponStaffSwing",
 	[1] = "WeaponDagger",
@@ -296,10 +231,7 @@ function sjson_TraitText(data)
 	local do_aspect = settings.hidden_aspectsanity == 1
 	if not (do_weapon or do_tool or do_aspect) then return end
 
-	-- The player already starts with this weapon, so its shop slot is NOT an AP
-	-- check (its unlock location is excluded — see should_ignore_weapon_location
-	-- in the apworld). Leave its vanilla name instead of relabelling it
-	-- "AP Location Check".
+	-- The starting weapon's shop slot is not an AP check, so keep its vanilla name.
 	local start_weapon = STARTING_WEAPON_NAMES[settings.initial_weapon or 0]
 
 	local location_items = H2AP_ReadLocationItems() or {}

@@ -33,12 +33,7 @@ function H2AP_Dir()
 end
 
 -- ── World identity ────────────────────────────────────────────────────────────
--- world_id is written into ap_settings.json by the Python client on connect.
--- It uniquely identifies the AP slot being played ({seed_name}_{slot}).
--- All IPC files are suffixed with the world_id so that multiple Hades II worlds
--- in the same generate don't share state, and switching worlds is safe.
--- Note: settings are cached per hot-reload session; triggering a hot-reload
--- (or restarting the game) is required when switching worlds mid-session.
+-- world_id ({seed_name}_{slot}) suffixes every IPC file so multiple Hades II worlds don't share state.
 
 function H2AP_WorldId()
 	local s = H2AP_LoadSettings()
@@ -84,8 +79,7 @@ function H2AP_ReadInbox()
 end
 
 -- ── Location items (written by Python client after LocationScouts) ────────────
--- Maps AP location name → item display string (e.g. "Progressive Sword [Player2]").
--- Cached after first successful read; nil returned and retried if file not found yet.
+-- AP location name → scouted item entry, cached after the first successful read.
 
 local _location_items_cache = nil
 
@@ -103,17 +97,12 @@ function H2AP_ReadLocationItems()
 	return _location_items_cache
 end
 
--- Force the location-items cache to refresh on next read (e.g. after the
--- Python client writes a new scout response).
+-- Force the location-items cache to refresh on next read.
 function H2AP_InvalidateLocationItemsCache()
 	_location_items_cache = nil
 end
 
--- Returns the structured entry (table) for a scouted location, or nil if
--- the file isn't on disk yet or the location wasn't scouted. Each entry has
---   item_name (str), player_slot (int), player_name (str),
---   sender_game (str), is_local (bool), display (str)
--- See HadesIIClient._write_location_items for the source of truth.
+-- Returns the scouted entry table for a location, or nil (see HadesIIClient._write_location_items for the fields).
 function H2AP_GetLocationItem(name)
 	local data = H2AP_ReadLocationItems()
 	if type(data) ~= "table" then return nil end

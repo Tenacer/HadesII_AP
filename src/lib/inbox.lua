@@ -7,15 +7,10 @@ function H2AP_ProcessInbox()
 	local inbox = H2AP_ReadInbox()
 	if not inbox then return end
 
-	-- The Python client may have written new scout responses to
-	-- ap_location_items_<world>.json since our last cache fill (e.g. a
-	-- LocationInfo arrived just after Connected). Drop the cache so the next
-	-- consumer (boss-reward spawn, sjson re-hook) sees fresh data.
+	-- Drop the scout cache so consumers see any newly written scout responses.
 	H2AP_InvalidateLocationItemsCache()
 
-	-- DeathLink: Python client appends this when another player dies.
-	-- deathlink_seq is an incrementing counter so each death only triggers once
-	-- even if the flag stays in the inbox across multiple polls.
+	-- DeathLink: deathlink_seq ensures each death only triggers once across polls.
 	if inbox.deathlink then
 		local seq = inbox.deathlink_seq or 0
 		local state = H2AP_LoadState()
@@ -54,12 +49,8 @@ function H2AP_ProcessInbox()
 		H2AP_FlushOutbox()
 	end
 
-	-- Sync story flags on every poll (idempotent). Also covers restarts where
-	-- items_index is restored from state but GameState flags need re-applying.
+	-- Sync story flags and shrine levels on every poll (both idempotent).
 	H2AP_SyncStoryFlags(inbox)
-
-	-- Re-apply shrine levels on every poll so they take effect as soon as
-	-- ap_settings.json is written by the Python client, even mid-hub-session.
 	H2AP_ApplyShrineLevels()
 end
 

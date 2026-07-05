@@ -2,10 +2,7 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Reverse Order Rivals ──────────────────────────────────────────────────────
--- When settings.reverse_order_rivals == 1 AND settings.fear_system ∈ {1, 2}:
---   Rank N of the Vow of Rivals enhances the LAST N biomes' bosses instead of
---   the first N. Rank 1 → Chronos/Typhon, rank 2 → +Cerberus/Prometheus, etc.
--- With vanilla fear_system the override is inert.
+-- Under reverse_order_rivals, rank N of the Vow of Rivals enhances the LAST N biomes' bosses instead of the first N.
 
 local function ap_reverse_active()
     local settings = H2AP_LoadSettings()
@@ -15,14 +12,7 @@ local function ap_reverse_active()
     return true
 end
 
--- Override IsBossDifficultyShrineUpgradeActive via modutil.mod.Path.Set so the
--- write lands in _G (where the game's scripts resolve the global). A bare
--- `function IsBossDifficultyShrineUpgradeActive(...)` declaration here writes
--- to our LuaENVY-private env and the game never sees it — see
--- feedback_modutil_wrap_crash.md.
---
--- The original returns false when shrineRank < EnteredBiomes; we flip the
--- comparison so rank N covers biomes (5-N)..4 instead of 1..N.
+-- Override via Path.Set so the write lands in the game's _G, flipping the rank comparison so rank N covers the last N biomes.
 if not _ap_orig_IsBossDifficultyShrineUpgradeActive then
     _ap_orig_IsBossDifficultyShrineUpgradeActive = IsBossDifficultyShrineUpgradeActive
 end
@@ -66,15 +56,7 @@ modutil.mod.Path.Set("IsBossDifficultyShrineUpgradeActive", ap_is_boss_difficult
 print("[HadesII_AP] Reverse rivals: IsBossDifficultyShrineUpgradeActive override installed")
 
 -- ── Vow incantation requirement patching ─────────────────────────────────────
--- The cauldron incantations WorldUpgradeBossDifficultyT2/T3/T4 gate themselves
--- on having beaten the previous tier's EM2 encounters. In reverse mode those
--- encounter cache entries are written for different biomes, so we rewrite the
--- HasAll lists to match. T4 also has ReachedTrueEnding + Chronos/Typhon gates
--- which we strip so T4 is reachable from gameplay (rank 4 in reverse fights
--- the easiest bosses).
---
--- Mutating WorldUpgradeData at module load time triggers the App.Reset GC
--- crash; this is called lazily from H2AP_SetupMap, idempotently.
+-- Rewrite the T2/T3/T4 vow incantation encounter gates for reverse order and strip T4's post-ending gates; called lazily from H2AP_SetupMap to avoid the App.Reset GC crash.
 
 local AP_REVERSE_PATCH_FLAG = "_ap_reverse_rivals_patched"
 

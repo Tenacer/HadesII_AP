@@ -1,8 +1,7 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- Tunable amounts (per-item-received). Mirrors the original Hades 1
--- (Polycosmos) values; MaxHealth helper downgraded from +25 to +5.
+-- Tunable per-item amounts, mirroring Polycosmos.
 local TRAP_MONEY_AMOUNT        = 100
 local TRAP_HEALTH_FRACTION     = 0.25     -- of MaxHealth
 local HELPER_MAX_HEALTH_PER    = 5
@@ -51,15 +50,7 @@ end
 
 -- ── Helper dispatch ──────────────────────────────────────────────────────────
 
--- Apply a flat max-health bonus to the live run hero the way the game does:
--- as a RoomRewardMaxHealthTrait (PropertyChanges to MaxHealth) added via
--- AddTraitToHero. Hades II recomputes CurrentRun.Hero.MaxHealth from the hero's
--- traits on every trait recalc (UpdateHeroTraitDictionary / EquipMetaUpgrades /
--- room loads), so a plain `Hero.MaxHealth = Hero.MaxHealth + n` mutation is wiped
--- on the next recalc — which is why the helper "did nothing". Routing through a
--- trait makes the bonus part of that recomputation, so it sticks for the run.
--- (Mirrors AddMaxHealth in RoomLogic.lua, minus its threading/UI presentation so
--- it is safe to call at StartNewRun and during an inbox poll.)
+-- Apply a max-health bonus as a RoomRewardMaxHealthTrait — a raw MaxHealth write would be wiped on the next trait recalc.
 local function apply_max_health_trait(amount)
 	if amount <= 0 then return false end
 	if not (CurrentRun and CurrentRun.Hero) then return false end
@@ -78,9 +69,7 @@ function H2AP_GiveItemHelper(item_name)
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
 		L.MaxHealth = L.MaxHealth + 1
-		-- If a run is live, grant this item's share immediately (as a trait so it
-		-- survives recalcs). The full cumulative bonus is re-applied on the fresh
-		-- hero each run by H2AP_ApplyMaxHealthHelper.
+		-- Grant this item's share immediately if a run is live; the cumulative bonus re-applies each run.
 		if apply_max_health_trait(HELPER_MAX_HEALTH_PER) then
 			if FrameState then FrameState.RequestUpdateHealthUI = true end
 		end
@@ -98,13 +87,7 @@ function H2AP_GiveItemHelper(item_name)
 	return true
 end
 
--- Apply the full cumulative MaxHealth bonus to the freshly-built run hero.
--- Called from the StartNewRun override AFTER vanilla CreateNewHero, where
--- CurrentRun.Hero is a clean DeepCopy of HeroData (base 30, no prior bonus) with
--- its trait dictionary freshly built, so we add the whole bonus each run via a
--- trait (see apply_max_health_trait) rather than a raw field write that the next
--- trait recalc would wipe. Health is topped up to the new max since this runs at
--- run start before the hero takes damage.
+-- Apply the full cumulative MaxHealth bonus to the freshly-built run hero at StartNewRun.
 function H2AP_ApplyMaxHealthHelper()
 	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
@@ -117,7 +100,6 @@ function H2AP_ApplyMaxHealthHelper()
 end
 
 -- Add the persistent starting-money bonus on top of vanilla starting money.
--- Called from the StartNewRun override in reload.lua after the base call.
 function H2AP_ApplyInitialMoneyHelper()
 	if not init_lodger() then return end
 	local L = GameState.AP_HelperLodger
@@ -133,8 +115,7 @@ end
 
 -- ── Mid-run trap drain ───────────────────────────────────────────────────────
 
--- Mirrors PolycosmosTrapManager.ShouldAvoidTriggerTraps — avoid touching
--- CurrentRun mid-transition / mid-load (those are the documented crash spots).
+-- Avoid touching CurrentRun mid-transition / mid-load (the documented crash spots).
 local function unsafe_to_apply_traps()
 	if CurrentRun == nil or CurrentRun.Hero == nil or CurrentRun.CurrentRoom == nil then
 		return true

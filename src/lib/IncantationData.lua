@@ -4,8 +4,6 @@
 -- ── Incantation locations ─────────────────────────────────────────────────────
 
 -- Maps internal WorldUpgrade key → AP location name (= incantation display name).
--- Used to intercept cauldron completions and to apply effects when received.
--- Generated from HelpText.en.sjson cross-referenced with locations.csv.
 INCANTATION_LOCATIONS = {
 	["WorldUpgradeSurfacePenaltyCure"]         = "Unraveling a Fateful Bond",
 	["WorldUpgradeAltRunDoor"]                 = "Permeation of Witching-Wards",
@@ -104,23 +102,7 @@ for key, name in pairs(INCANTATION_LOCATIONS) do
 end
 
 -- ── AP-keyed (surface-lock) incantations ─────────────────────────────────────
--- The surface-unlock incantations (WorldUpgradeAltRunDoor +
--- WorldUpgradeSurfacePenaltyCure) are "AP-keyed" under `lock_surface_incantations`
--- (independent of `cauldronsanity`). Their model: the received AP item delivers
--- the incantation EFFECT (items.lua), and brewing the recipe fires the AP
--- location CHECK with the vanilla effect suppressed (ready.lua) — the same
--- intercept as cauldronsanity, except the recipe is revealed by the vanilla
--- Hermes/Hecate (door) and Moros (penalty cure) story rather than the AP item.
--- See reload.lua's H2AP_PatchSurfaceIncantationReveal +
--- H2AP_MaskSurfaceIncantationsForOffer for the two support pieces that keep the
--- reveal and the cauldron offer working once the effect is granted early.
---
--- The goal incantations (WorldUpgradeTimeStop + WorldUpgradeStormStop) are NOT
--- AP-keyed: under true_ending they brew via the vanilla cauldron flow, gated
--- only by their (patched) ingredient costs — see H2AP_PatchIncantationCosts.
--- GOAL_INCANTATION_KEYS / H2AP_IsGoalIncantation are kept solely to keep those
--- two out of the cauldronsanity icon/intercept so they stay vanilla even when
--- cauldronsanity is on.
+-- Surface-lock incantations are effect-on-receive / check-on-brew; the goal incantations stay vanilla and are only excluded from the cauldronsanity intercept.
 SURFACE_LOCK_INCANTATION_KEYS = {
 	WorldUpgradeAltRunDoor        = true,
 	WorldUpgradeSurfacePenaltyCure = true,
@@ -139,9 +121,7 @@ function H2AP_IsGoalIncantation(wu_key)
 	return GOAL_INCANTATION_KEYS[wu_key] == true
 end
 
--- Build the runtime set of AP-keyed WorldUpgrade keys based on the current
--- settings dict. Caller passes an `H2AP_LoadSettings()` result (or nil for an
--- empty result). Returns a set keyed by WorldUpgrade name.
+-- Build the runtime set of AP-keyed WorldUpgrade keys for the current settings.
 function H2AP_KeyedIncantations(settings)
 	local out = {}
 	if not settings then return out end
@@ -158,20 +138,7 @@ function H2AP_IsApKeyedIncantation(wu_key, settings)
 	return false
 end
 
--- True Ending ordering gate: keep Dissolution of Time (WorldUpgradeTimeStop)
--- un-brewable in the cauldron until the player has genuinely defeated Typhon with
--- Disintegration of Monstrosity active. Vanilla enforced this implicitly — Time
--- Stop's recipe needs Entropy, which only drops from that kill — but the AP mod
--- hands Entropy out as a free item (items.lua) and fakes
--- GameState.TyphonDefeatedWithStormStop (story.lua), so the implicit gate is gone.
--- We re-add it explicitly, keyed on AP_TyphonKilledWithStormStop, which is set
--- ONLY on the real in-game kill (score.lua's H2AP_OnRoomCleared) and is never
--- touched by the Entropy grant.
---
--- Installed once at ready_late startup — GameStateRequirements survive App.Reset
--- (unlike the Icon fields that force the other incantation patches to re-run in
--- the SetupMap wrap), so this deliberately does NOT ride that per-room path.
--- Idempotent via the `_ap_te_gate_patched` sentinel regardless.
+-- Keep Dissolution of Time un-brewable until Typhon is genuinely defeated with Storm Stop (the AP Entropy grant removed vanilla's implicit gate).
 function H2AP_PatchGoalIncantationGate()
 	if WorldUpgradeData == nil then return end
 	local settings = H2AP_LoadSettings() or {}

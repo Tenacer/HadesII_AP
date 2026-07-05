@@ -2,14 +2,7 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Broker QoL unlock ─────────────────────────────────────────────────────────
--- When the AP `unlock_broker` setting is on, grant the Broker (WorldUpgradeMarket)
--- from the start of the game. The Crossroads hub-load events call
--- ActivateConditionalItems(GhostAdminCategoryIndex = 1), which spawns the Broker
--- obstacle automatically for any category-1 WorldUpgrade whose
--- GameState.WorldUpgrades flag is set — so setting the flags before the hub
--- loads is all that's needed. WorldUpgradesAdded is set too because many
--- downstream requirement checks (Broker interactions, dependent incantations)
--- key off WorldUpgradesAdded.WorldUpgradeMarket rather than WorldUpgrades.
+-- Under unlock_broker, grant the Broker from game start by setting its WorldUpgrade flags before the hub loads.
 
 local BROKER_WORLD_UPGRADE = "WorldUpgradeMarket"
 

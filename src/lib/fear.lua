@@ -2,17 +2,9 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Fear system ───────────────────────────────────────────────────────────────
--- Handles reverse_Fear (1) and minimal_Fear (2) shrine level enforcement.
---
--- reverse_Fear: vow ranks from slot data start locked ON; receiving the
---   corresponding AP vow item lowers the rank by 1 (tracked in state.vow_received).
---   The altar/shrine is hidden so the player cannot change vow levels manually.
---
--- minimal_Fear: vow ranks from slot data are applied as a permanent floor at
---   game load; the shrine is hidden so levels never change.
+-- reverse_Fear starts vows locked ON and each AP vow item lowers a rank; minimal_Fear applies vow ranks as a permanent floor; the shrine is hidden in both.
 
--- Maps AP vow item name → shrine upgrade name. One AP item per vow; the pool
--- holds N copies where N is the starting rank from slot_data.vow_ranks.
+-- Maps AP vow item name → shrine upgrade name.
 VOW_SHRINE_MAP = {
     ["Vow of Pain"]    = "EnemyDamageShrineUpgrade",
     ["Vow of Grit"]    = "EnemyHealthShrineUpgrade",
@@ -51,8 +43,7 @@ local function refresh_shrine_cache()
     if ok then GameState.SpentShrinePointsCache = total end
 end
 
--- Called on every SetupMap, every inbox poll, and after receiving vow items.
--- Enforces shrine levels according to the active fear system + current AP state.
+-- Enforce shrine levels for the active fear system; called on every SetupMap and inbox poll.
 function H2AP_ApplyShrineLevels()
     local settings = H2AP_LoadSettings()
     if not settings or settings.fear_system == 3 or settings.fear_system == nil then
@@ -92,8 +83,7 @@ function H2AP_ApplyShrineLevels()
     refresh_shrine_cache()
 end
 
--- Called from H2AP_GiveItem() when a vow item is received in reverse_Fear mode.
--- Increments the unlock counter for the shrine upgrade and re-applies levels.
+-- Receiving a vow item in reverse_Fear: bump the unlock counter and re-apply levels.
 function H2AP_GiveItemVow(item_name)
     local shrine_name = H2AP_GetShrineForVowItem(item_name)
     if not shrine_name then return false end

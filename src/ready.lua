@@ -1,13 +1,7 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- Hooks set up once at startup. The AP-icon and SJSON-label helpers they call
--- are still defined in reload.lua so those (text/icon) logic tweaks can be
--- hot-reloaded; the library modules below are pure definitions, so they are
--- imported here (loaded once, survive App.Reset) rather than from reload.lua,
--- where they would needlessly re-run on every hot-reload. The two library files
--- with import-time side effects (lib/rivals.lua, lib/weapons.lua) are imported
--- from ready_late.lua so their installs run exactly once.
+-- Hooks and pure library imports installed once at startup; side-effecting libraries (rivals, weapons) load from ready_late.lua instead.
 
 -- ── Library modules (pure definitions) ────────────────────────────────────────
 
@@ -34,8 +28,7 @@ import 'lib/inbox.lua'
 
 -- ── AP icon package ──────────────────────────────────────────────────────────
 
--- Load our custom texture package (Tenacer_AP-HadesII_AP.pkg) so the AP icon
--- animation is available. Hell2Modding auto-registers it; LoadPackages activates it.
+-- Load our texture package so the AP icon animation is available.
 local ap_icon_pkg = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
 LoadPackages({ Name = ap_icon_pkg })
 
@@ -71,18 +64,9 @@ end)
 -- end})
 
 -- ── Room / map hooks ─────────────────────────────────────────────────────────
--- Note: the SetupMap and OnAllEnemiesDead wraps live in ready_late.lua so they
--- register after on_all_mods_loaded — several other installed mods (DamageMeter,
--- Cosmetics_API, MelSkin, SharedKeepsakePort, PonyMenu) also hook SetupMap, and
--- late registration keeps our wrap's position in the chain deterministic
--- (see ModUtil issue #12). KillHero is moved there too for the same reason.
+-- SetupMap, OnAllEnemiesDead and KillHero wraps live in ready_late.lua for deterministic chain order with other mods.
 
--- Boss reward dispatcher. Branches on H2AP_BossRewardAction (set in lib/score.lua):
---   ap_check  → spawn an interactable for the AP item placed at this location
---               (resource-obstacle visual when local + recognised, AP icon
---               otherwise). The AP check fires when the player picks it up.
---   fallback  → past per-boss kill count; spawn Nightmare + Gemstones drops
---   vanilla   → BossDefeats mode (or non-boss room); let vanilla reward through
+-- Boss reward dispatcher: ap_check spawns an AP pickup, fallback drops Nightmare + Gemstones, vanilla passes through.
 modutil.mod.Path.Wrap("SpawnRoomReward", function(base, eventSource, args)
 	local currentRoom = CurrentRun and CurrentRun.CurrentRoom
 	local action = H2AP_BossRewardAction(currentRoom)
@@ -106,19 +90,7 @@ end)
 
 -- ── Cauldron interception ────────────────────────────────────────────────────
 
--- Three-way dispatch on the brewed incantation:
---  1. Surface-lock (AP-keyed under lock_surface_incantations): brewing is the AP
---     location CHECK. The effect was delivered by the received AP item
---     (items.lua), so we suppress the vanilla brew effect (no base()) and mark
---     AP_SurfaceIncantationChecked — exactly like cauldronsanity, but the recipe
---     is revealed by the vanilla Moros/Hermes story rather than the AP item.
---  2. Cauldronsanity (the 86 non-special incantations): intercept and suppress
---     the vanilla effect. The AP item delivers the effect when received.
---     We don't call base() because CloseGhostAdminScreen with the purchase
---     button takes the incantation-animation branch (no camera pan); instead
---     we replicate only what we need and pass screen.Components.CloseButton so
---     the camera correctly returns to Melinoë.
---  3. Otherwise: vanilla, no AP involvement.
+-- Three-way cauldron dispatch: surface-lock and cauldronsanity brews send the AP check and suppress the vanilla effect, everything else runs vanilla.
 modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local settings = H2AP_LoadSettings()
 	local itemData = button and button.Data
@@ -128,31 +100,17 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 	local ap_location = INCANTATION_LOCATIONS[wu_key]
 	if not ap_location then return base(screen, button) end
 
-	-- Broker is granted for free at start when unlock_broker is on, so it's
-	-- never an AP location. The cauldron won't offer an already-brewed
-	-- incantation, but guard anyway so a stray re-brew runs vanilla, not AP.
+	-- Broker is granted for free when unlock_broker is on, so a stray re-brew runs vanilla.
 	if settings.unlock_broker == 1 and wu_key == "WorldUpgradeMarket" then
 		return base(screen, button)
 	end
 
-	-- Surface-lock: brewing IS the location check; the effect comes from the AP
-	-- item (items.lua), so suppress the vanilla WorldUpgrade grant (no base()) —
-	-- otherwise brewing alone would unlock the surface, defeating the shuffle.
-	-- AP_SurfaceIncantationChecked records that the check fired so the cauldron
-	-- offer mask (GhostAdminDisplayCategory wrap) demotes the recipe to "brewed"
-	-- and never re-fires the check.
+	-- Surface-lock: brewing is the location check; the effect comes from the AP item, so suppress the vanilla grant.
 	if H2AP_IsApKeyedIncantation(wu_key, settings) then
 		GhostAdminItemPurchasedPresentation(button, itemData)
 		GameState.AP_SurfaceIncantationChecked = GameState.AP_SurfaceIncantationChecked or {}
 		GameState.AP_SurfaceIncantationChecked[wu_key] = true
-		-- AltRunDoor's WorldUpgradesAdded is purely a "brewed" record — the door
-		-- itself is WorldUpgrades-gated and granted by the AP item — so set it on
-		-- brew to mirror vanilla: it ends the pre-brew Hermes/Hecate beats
-		-- (PathFalse-WorldUpgradesAdded) and fires the surface-door-unlocked prompt
-		-- (CurrentRun.WorldUpgradesAdded). SurfacePenaltyCure's WorldUpgradesAdded
-		-- IS most of its cure effect, so we must NOT set it here — brewing must not
-		-- grant the cure without the AP item; its done-state rides
-		-- AP_SurfaceIncantationChecked + the offer mask instead.
+		-- Set the "brewed" record for AltRunDoor only; SurfacePenaltyCure's flag IS its cure effect and must stay unset until the AP item arrives.
 		if wu_key == "WorldUpgradeAltRunDoor" then
 			GameState.WorldUpgradesAdded[wu_key] = true
 			if CurrentRun and CurrentRun.WorldUpgradesAdded then
@@ -187,18 +145,7 @@ end)
 
 -- ── Keepsakesanity location check ────────────────────────────────────────────
 
--- Intercepts the vanilla keepsake-received presentation when keepsakesanity is on.
--- GiftLogic.lua sets GiftPresentation[gift]=true and NewKeepsakeItem[gift]=true just
--- before calling us, so we undo those to prevent the vanilla keepsake being granted —
--- GiftPresentation is the game's canonical "owns this keepsake" flag (read by
--- bounty/objective/incantation requirements), so it MUST stay clear until AP delivers
--- the keepsake item. We then show our own AP banner and send the AP location check.
---
--- We also set GameState.AP_KeepsakeChecked[gift]. The matching GiftData guard in
--- ready_late.lua makes the keepsake gift-level ineligible once that flag is set, so
--- GiftLogic stops re-calling this presentation on every subsequent gift. Without it,
--- clearing GiftPresentation made the game think the keepsake was never received and
--- re-fired the AP banner each time the player gifted the NPC.
+-- Keepsakesanity: undo the vanilla keepsake grant, send the check, and flag AP_KeepsakeChecked so GiftLogic doesn't re-fire this presentation.
 modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, giftName)
 	local settings = H2AP_LoadSettings()
 	if settings and settings.keepsakesanity == 1 then
@@ -218,15 +165,7 @@ end)
 
 -- ── Familiarsanity location check ─────────────────────────────────────────────
 
--- Recruiting a familiar (the petting sequence) is the AP location check. We fire
--- the check up front so it registers immediately, let the full vanilla recruit
--- presentation play for feedback, then undo the vanilla FamiliarsUnlocked grant —
--- ownership of the companion is owned by the AP item (H2AP_GiveItem), not the
--- recruit. The AP_FamiliarReceived guard protects the item-first case: if the AP
--- item already granted the familiar, we leave FamiliarsUnlocked alone so the
--- player keeps the companion they already own. AP_FamiliarChecked stops the wild
--- encounter respawning (see H2AP_PatchFamiliarGates). Frinos (hub) routes through
--- this same function, so all five familiars are handled uniformly.
+-- Familiarsanity: recruiting sends the check, then the vanilla FamiliarsUnlocked grant is undone unless the AP item already delivered it.
 modutil.mod.Path.Wrap("FamiliarRecruitPresentation", function(base, usee, args)
 	local settings = H2AP_LoadSettings()
 	local name = usee and usee.Name
@@ -249,11 +188,7 @@ end)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
 
--- ready_late.lua replaces the GiftData.GameStateRequirements of AP-mapped keepsakes
--- so the player can gift those NPCs without story prerequisites. The side effect is that the keepsake
--- rack screen uses those same (now-empty) requirements to compute Unlocked, so
--- every keepsake appears available. Override Unlocked here with a direct
--- GiftPresentation lookup — the same field GiftLogic and H2AP_GiveItem both write.
+-- The rack screen computes Unlocked from the (emptied) GiftData requirements, so recompute it from GiftPresentation / AP receipt.
 modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, args)
 	local settings = H2AP_LoadSettings()
 	if settings and args and args.UpgradeData and args.UpgradeData.Gift then
@@ -268,16 +203,7 @@ end)
 
 -- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
 
--- Hint each visible incantation when a cauldron category is displayed (initial
--- open + every tab switch). H2AP_HintCauldronVisible reads screen.AvailableItems
--- which base() has just populated, then dedupes via H2AP_HintLocation so each
--- location is hinted at most once. Uncontested — no other installed mod hooks
--- GhostAdminDisplayCategory — so this install-once wrap lives here in ready.lua.
--- Keep the AP-controlled surface-lock recipes brewable until their check fires.
--- The cauldron classifies "brewed vs offered" from GameState.WorldUpgradesAdded,
--- which the cure's effect-grant may have set on receive (SurfacePenaltyCure). We
--- mask that flag to our AP_SurfaceIncantationChecked truth for the build, then
--- restore it so the granted effect persists. (Also hints visible incantations.)
+-- Mask surface-lock incantations to their AP-checked state while the offer list builds, then hint every visible incantation.
 modutil.mod.Path.Wrap("GhostAdminDisplayCategory", function(base, screen, button)
 	local settings = H2AP_LoadSettings()
 	local masked = settings and H2AP_MaskSurfaceIncantationsForOffer(settings) or nil
@@ -286,9 +212,7 @@ modutil.mod.Path.Wrap("GhostAdminDisplayCategory", function(base, screen, button
 	H2AP_HintCauldronVisible(screen)
 end)
 
--- Hint each visible (non-cashed-out) prophecy when the Fated List opens.
--- Replicates the game's filter independently rather than reading screen state,
--- which is cleaner because OpenQuestLogScreen has waits before it builds buttons.
+-- Hint each visible prophecy when the Fated List opens.
 modutil.mod.Path.Wrap("OpenQuestLogScreen", function(base, args)
 	local result = base(args)
 	H2AP_HintQuestlogVisible()
@@ -297,11 +221,7 @@ end)
 
 -- ── Fatesanity: intercept prophecy cashout ───────────────────────────────────
 
--- For prophecies that are AP locations (fatesanity on), suppress the vanilla
--- AddResource — the resource is granted instead by H2AP_GiveItem when the AP item
--- comes back from the server. The body is inline-replicated from
--- QuestLogLogic.lua:211 so we can drop just the one AddResource line; see
--- the cauldron-incantation pattern (HandleGhostAdminPurchase) for the same idea.
+-- Fatesanity: replicate CashOutQuest minus its AddResource, which the AP item delivers instead.
 modutil.mod.Path.Wrap("CashOutQuest", function(base, screen, button)
 	local settings = H2AP_LoadSettings()
 	local questData = button and button.Data
@@ -335,16 +255,7 @@ end)
 
 -- ── Hidden aspect unlock tracking ────────────────────────────────────────────
 
--- Under hidden_aspectsanity the aspect's WorldUpgradesAdded flag is owned by the
--- shop location check (HandleWeaponShopPurchase in ready_late.lua), not by ownership.
--- Vanilla HasAnyAspectUnlocked reads WorldUpgradesAdded, so the kit's aspect-select
--- prompt would only light after the *check* fires, not after the AP aspect *item*
--- arrives. Re-point it at WeaponsUnlocked — the same flag the per-aspect list uses
--- (WeaponUpgradeLogic.lua:71), and the one H2AP_GiveItem sets — so the prompt tracks
--- the item and stays fully decoupled from the shop slot. Reading WeaponsUnlocked is
--- vanilla-faithful (vanilla sets it too, else :71 could never show the aspect).
--- The settings gate is checked at call time (not install time) so this wrap can live
--- here in ready.lua, where lib/settings.lua isn't loaded yet when the file executes.
+-- Hidden aspectsanity: re-point HasAnyAspectUnlocked at WeaponsUnlocked so the kit prompt tracks the AP item, not the shop check.
 modutil.mod.Path.Wrap("HasAnyAspectUnlocked", function(base, weaponName)
 	local settings = H2AP_LoadSettings()
 	if not (settings and settings.hidden_aspectsanity == 1) then
@@ -363,8 +274,7 @@ end)
 
 -- ── Shrine access block ───────────────────────────────────────────────────────
 
--- In reverse_Fear and minimal_Fear modes, vow levels are managed by the mod.
--- Prevent the player from opening the shrine screen to avoid confusion.
+-- Block the shrine screen when the mod manages vow levels (reverse/minimal fear).
 modutil.mod.Path.Wrap("UseShrineObject", function(base, usee, args)
 	local settings = H2AP_LoadSettings()
 	if settings and settings.fear_system ~= nil and settings.fear_system ~= 3 then

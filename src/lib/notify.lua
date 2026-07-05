@@ -2,30 +2,14 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── In-game notification toasts (mod-owned, ID-safe) ─────────────────────────
---
--- These DELIBERATELY do not use ModUtil.Hades.PrintStack. That helper keeps a
--- single shared stack of screen components and, every cull cycle, Destroys all
--- of its row object IDs and recreates the visible ones via a CullEnabled/
--- CullPrintStack state machine that stalls. The Destroy churn frees engine
--- object IDs, which Hades immediately recycles to the next SpawnObstacle /
--- CreateConsumableItem — including a just-dropped god boon. A later stale-id
--- Destroy from the stalled cull then kills that recycled object, deleting the
--- boon while it stays registered in MapState.RoomRequiredObjects → the exit
--- door locks with nothing to collect (soft-lock). The same stall is why
--- PrintStack messages "stop after a few".
---
--- Our replacement: each toast is a single screen component that this module
--- creates, fades, and Destroys on its OWN thread. We only ever Destroy an id we
--- created this cycle and never hold an id past its own Destroy, so no live world
--- object can ever be hit by a stale id.
+-- Deliberately avoids ModUtil.Hades.PrintStack, whose stale-id Destroy churn can delete live world objects (soft-lock); each toast here owns and destroys only its own component.
 
 local NOTIFY_DEFAULTS = {
 	delay    = 5.0,
 	fontsize = 15,  -- fallback only; the live value is config.notify_font_size
 	font     = "LatoBold",
 	sound    = "/Leftovers/SFX/AuraOff",
-	-- Per-toast backing rectangle colour. RGB matches the panel backing; alpha
-	-- 0.75 keeps the text readable over the scene.
+	-- Backing rectangle colour; alpha keeps the text readable over the scene.
 	bgcol    = { 0.0745, 0.1020, 0.0980, 0.75 },
 }
 
@@ -34,34 +18,17 @@ local COLOR_RECEIVED = { 0.65, 1.00, 0.65, 1.00 }
 local COLOR_SCORE    = { 0.85, 0.85, 0.85, 1.00 }
 local COLOR_MSTONE   = { 1.00, 0.85, 0.45, 1.00 }
 
--- Toast layout. Slots stack upward from a fixed anchor near the bottom-left so
--- the stack stays clear of the combat HUD. Each visible toast owns one slot;
--- when it expires the slot frees and the next toast reuses it. Existing toasts
--- never move (no repositioning churn).
+-- Toast layout: slots stack upward from a fixed anchor near the bottom-left; existing toasts never move.
 local NOTIFY_GROUP   = "H2AP_Notify"
 local NOTIFY_ROW_H   = 30
 local NOTIFY_MAX     = 12
 local NOTIFY_BASE_X  = 420
 local NOTIFY_BASE_DY = 220   -- pixels above the screen bottom for slot 0
 
--- slot index (1..NOTIFY_MAX) → deadline (a _worldTime value) while occupied, nil
--- when free.
---
--- IMPORTANT: a toast runs inside a non-persistent thread() (no Persist flag), and
--- Hades' KillNonPersistentThreads() (Main.lua) runs on every map/room load, so it
--- kills any toast parked in wait() mid-display. A killed thread never reaches its
--- own slot-release line, so if a slot were a plain boolean it would leak one
--- transition at a time until all NOTIFY_MAX slots are permanently "busy" and no
--- new toast can ever appear (the multi-hour "messages stop" bug). To make slots
--- self-healing we store a DEADLINE per slot and reclaim any slot whose deadline
--- has passed, regardless of whether its thread survived. The engine tears down our
--- screen components on map load, so a killed thread leaves no visible orphan — only
--- the slot bookkeeping needed recovering.
+-- slot index (1..NOTIFY_MAX) → deadline while occupied, nil when free; deadlines (not booleans) let slots self-heal when a map load kills the toast thread before it releases its slot.
 local notify_slots = {}
 
--- FIFO queue of toasts waiting for a free slot, drained as slots free. Bounded so
--- a runaway sender can't grow it without limit; on overflow we drop the OLDEST
--- pending toast (the newest traffic is the most useful).
+-- Bounded FIFO queue of toasts waiting for a free slot; overflow sheds the oldest.
 local notify_pending = {}
 local NOTIFY_PENDING_MAX = 128
 local NOTIFY_RECLAIM_GRACE = 1.0   -- secs past a toast's lifetime before forced reclaim
@@ -70,8 +37,7 @@ local function notify_now()
 	return _worldTime or 0
 end
 
--- Free any slot whose deadline has elapsed. This is what recovers slots whose
--- toast thread was killed by a map load before it could release itself.
+-- Free any slot whose deadline has elapsed.
 local function notify_reclaim()
 	local now = notify_now()
 	for i = 1, NOTIFY_MAX do
@@ -82,9 +48,7 @@ local function notify_reclaim()
 	end
 end
 
--- Claim a free slot for a toast of the given lifetime, reclaiming expired slots
--- first. The deadline is the lifetime plus a grace margin so a live thread will
--- normally release its slot on completion before the forced reclaim fires.
+-- Claim a free slot for a toast of the given lifetime, reclaiming expired slots first.
 local function notify_claim_slot(lifetime)
 	notify_reclaim()
 	for i = 1, NOTIFY_MAX do
@@ -96,15 +60,10 @@ local function notify_claim_slot(lifetime)
 	return nil
 end
 
--- Forward declaration: a finishing toast pumps the queue, and the pump starts
--- toasts, so the two reference each other.
+-- Forward declaration: the pump and toasts reference each other.
 local notify_pump
 
--- One self-contained toast in a claimed slot: create → fade in → wait → fade out
--- → Destroy. Runs entirely inside a pcall'd thread; failure leaves no dangling id
--- because the only id we touch is the one we just created. On normal exit it frees
--- its slot early and pumps the queue; if the thread is instead killed on a map
--- load, the slot is recovered later by its deadline (see notify_reclaim).
+-- One self-contained toast in a claimed slot: create, fade in, wait, fade out, Destroy, then free the slot and pump the queue.
 local function notify_start(slot, t)
 	thread(function()
 		pcall(function()
@@ -118,11 +77,7 @@ local function notify_start(slot, t)
 			SetScaleX({ Id = id, Fraction = 10 / 6 })
 			SetScaleY({ Id = id, Fraction = 0.1 })
 			SetColor({ Id = id, Color = t.bgcol })
-			-- Center the text on the backing rectangle's anchor. Left-justified text
-			-- grew rightward from the box centre and spilled past the right edge
-			-- ("text outside the box"); Center keeps it balanced within the backing
-			-- (a thin single-line bar, so we don't wrap — wrapping would spill out
-			-- the top/bottom of the 1-line-tall backing instead).
+			-- Center justification keeps the text inside the single-line backing bar.
 			CreateTextBox({
 				Id = id, Text = t.text, FontSize = t.fontsize, OffsetX = 0, OffsetY = 0,
 				Color = t.color, Font = t.font, Justification = "Center",
@@ -135,8 +90,7 @@ local function notify_start(slot, t)
 			wait(0.33)
 			Destroy({ Ids = { id } })
 		end)
-		-- Always release the slot, even if presentation failed partway, then let
-		-- the next queued toast (if any) claim it.
+		-- Always release the slot, then let the next queued toast claim it.
 		notify_slots[slot] = nil
 		notify_pump()
 	end)
@@ -155,11 +109,10 @@ notify_pump = function()
 	end
 end
 
--- Enqueue a toast and immediately try to display it. Replaces the old
--- drop-on-full behaviour.
+-- Enqueue a toast and immediately try to display it.
 local function notify_spawn(text, color, delay, sound, bgcol, fontsize, font)
 	if #notify_pending >= NOTIFY_PENDING_MAX then
-		table.remove(notify_pending, 1)  -- bound the queue; shed the oldest
+		table.remove(notify_pending, 1)  -- shed the oldest
 	end
 	notify_pending[#notify_pending + 1] = {
 		text = text, color = color, delay = delay, sound = sound,
@@ -198,9 +151,7 @@ function H2AP_NotifySent(location_name)
 	H2AP_Notify(text, COLOR_SENT)
 end
 
--- Accepts either an item_name string (legacy) or the full inbox entry table
--- {item_name, player_name, sender_game, is_local}. Remote items get a
--- "from <Player> (<Game>)" suffix; local items keep the bare label.
+-- Accepts an item_name string or the full inbox entry table; remote items get a "from <Player> (<Game>)" suffix.
 function H2AP_NotifyReceived(item)
 	local item_name, player_name, sender_game, is_local
 	if type(item) == "table" then
@@ -233,21 +184,16 @@ function H2AP_NotifyReceived(item)
 	H2AP_Notify(text, COLOR_RECEIVED)
 end
 
--- Score ticks fire every cleared room — no sound to avoid spam. `route_label`
--- ("Underworld"/"Surface") is shown in separate split mode so the player knows
--- which route's score they're building; nil → combined mode shows the total.
+-- Score ticks fire every cleared room, so no sound; route_label is shown in separate split mode, nil in combined.
 function H2AP_NotifyScore(delta, total, route_label, to_next)
 	local route = route_label and (route_label .. " ") or ""
 	local label = route_label and (route_label .. " score") or "Total score"
-	-- `to_next` (points until the next check) is nil once every check is unlocked.
 	local tail = to_next and ("  (" .. tostring(to_next) .. " to next check)") or ""
 	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total) .. tail,
 		COLOR_SCORE, nil, "")
 end
 
--- `route_label` ("Underworld"/"Surface") names the route whose check unlocked in
--- separate split mode; nil → combined mode reads "Score check". `budget` is the
--- pool the count is measured against (the route's share, or the full pool).
+-- Announce an unlocked score check against its route's budget (route_label nil in combined mode).
 function H2AP_NotifyMilestone(checks_sent, budget, route_label)
 	local prefix = route_label and (route_label .. " score check") or "Score check"
 	H2AP_Notify(prefix .. " unlocked (" .. checks_sent .. "/" .. budget .. ")",

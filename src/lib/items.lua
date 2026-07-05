@@ -27,30 +27,12 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
 		return true
 	end
-	-- Incantation effects. Both surface-lock and cauldronsanity incantations
-	-- deliver their EFFECT from the received AP item here; the matching location
-	-- CHECK fires when the player brews the recipe (HandleGhostAdminPurchase),
-	-- which suppresses the vanilla brew effect.
+	-- Incantations deliver their effect from the received AP item; the location check fires on brew.
 	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
 	if wu_key then
 		local settings = H2AP_LoadSettings()
 		if H2AP_IsApKeyedIncantation(wu_key, settings) then
-			-- Surface-lock incantations: the recipe is revealed by the vanilla
-			-- Hermes/Hecate (door) and Moros (penalty cure) story sequences, so we
-			-- only grant the effect here, never touch the recipe's visibility.
-			--
-			-- AltRunDoor's effect (the surface door) is gated purely on
-			-- GameState.WorldUpgrades, while its Hermes/Hecate story beats are
-			-- PathFalse-WorldUpgradesAdded — so we set ONLY WorldUpgrades and leave
-			-- WorldUpgradesAdded as the player's "actually brewed" record, keeping
-			-- that whole sequence alive.
-			--
-			-- SurfacePenaltyCure's effect spans both flags: the core surface-room
-			-- cure is WorldUpgrades-gated, but the Selene/audio/codex effects are
-			-- WorldUpgradesAdded-gated, so we grant the full set for a complete cure.
-			-- Its reveal no longer needs the curse trait (H2AP_PatchSurfaceIncantationReveal),
-			-- and the cauldron still offers it for the check via the
-			-- GhostAdminDisplayCategory mask in ready.lua.
+			-- Surface-lock: grant only WorldUpgrades so the brew/story sequence stays alive; SurfacePenaltyCure also needs WorldUpgradesAdded since part of its cure is gated on it.
 			GameState.WorldUpgrades[wu_key]       = true
 			GameState.WorldUpgradesViewed[wu_key] = true
 			if wu_key == "WorldUpgradeSurfacePenaltyCure" then
@@ -96,12 +78,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave Entropy (MixerMythic)")
 		return true
 	end
-	-- Keepsakes: track the AP-received unlock in our own GameState field so the
-	-- vanilla GiftPresentation flag stays clear. That way GiveGift still calls
-	-- PlayerReceivedGiftPresentation when the player gifts the NPC, letting our
-	-- ready.lua wrap fire and send the AP location check. CreateKeepsakeIcon
-	-- (also wrapped in ready.lua) reads AP_KeepsakeReceived to mark the keepsake
-	-- as equipable on the rack.
+	-- Keepsakes: track the AP unlock in AP_KeepsakeReceived so GiftPresentation stays clear and the gifting check remains reachable.
 	local gift_id = KEEPSAKE_GIFT_IDS[item_name]
 	if gift_id then
 		GameState.AP_KeepsakeReceived = GameState.AP_KeepsakeReceived or {}
@@ -109,11 +86,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave keepsake: " .. item_name)
 		return true
 	end
-	-- Familiars: grant the companion. FamiliarsUnlocked is the canonical "owns this
-	-- familiar" flag everything (kit / traits / codex) keys off, so setting it is the
-	-- whole unlock. We also record AP_FamiliarReceived so the recruit wrap (ready.lua)
-	-- knows not to undo FamiliarsUnlocked when the player later recruits the wild
-	-- familiar for its location check (the item-first case).
+	-- Familiars: set FamiliarsUnlocked (the whole unlock) and record AP_FamiliarReceived so a later recruit doesn't undo it.
 	local familiar = FAMILIAR_ITEM_TO_NAME and FAMILIAR_ITEM_TO_NAME[item_name]
 	if familiar then
 		GameState.AP_FamiliarReceived = GameState.AP_FamiliarReceived or {}
@@ -127,12 +100,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave familiar: " .. item_name .. " (" .. familiar .. ")")
 		return true
 	end
-	-- Tools: grant usability only. HasAccessToTool reads WeaponsUnlocked, so this
-	-- alone makes the tool work at gathering nodes. We deliberately do NOT touch
-	-- WorldUpgradesAdded — that flag is owned solely by the WeaponShop-purchase
-	-- interception (reload.lua), which uses it to retire the shop slot once the AP
-	-- location check is fired. Keeping them separate means the shop slot survives
-	-- when the item arrives first, so the location check stays reachable either way.
+	-- Tools: set WeaponsUnlocked only; WorldUpgradesAdded belongs to the shop interception so the slot check stays reachable.
 	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
 	if tool then
 		GameState.WeaponsUnlocked[tool]         = true
@@ -143,14 +111,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave tool: " .. item_name .. " (" .. tool .. ")")
 		return true
 	end
-	-- Weapons: grant usability only. IsWeaponUnlocked reads WeaponsUnlocked, which
-	-- drives kit availability (AssignWeaponKits / UpdateWeaponKits). We deliberately
-	-- do NOT touch WorldUpgradesAdded — that flag is owned solely by the WeaponShop-
-	-- purchase interception (reload.lua), which uses it to retire the shop slot once
-	-- the AP location check fires. Keeping them separate means the shop slot survives
-	-- when the item arrives first, so the location check stays reachable either way.
-	-- Equipability applies on the next map setup; if the player is already in the
-	-- Training Grounds, ActivateWeaponKit makes the kit useable in the live scene.
+	-- Weapons: set WeaponsUnlocked only (same shop-slot reasoning as tools), then refresh the live kit if the player is at it.
 	local weapon = WEAPON_ITEM_TO_NAME and WEAPON_ITEM_TO_NAME[item_name]
 	if weapon then
 		GameState.WeaponsUnlocked[weapon]        = true
@@ -171,12 +132,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
 		return true
 	end
-	-- Hidden aspects: grant usability only. WeaponsUnlocked drives both the per-aspect
-	-- entry in the upgrade screen (WeaponUpgradeLogic.lua:71) and our overridden
-	-- HasAnyAspectUnlocked (reload.lua), which gates the kit's aspect-select prompt.
-	-- We deliberately do NOT touch WorldUpgradesAdded — vanilla HasAnyAspectUnlocked
-	-- reads it, but our override re-points that to WeaponsUnlocked so the shop slot
-	-- (owned by the WeaponShop-purchase interception) survives the item arriving first.
+	-- Hidden aspects: set WeaponsUnlocked only (same shop-slot reasoning as tools).
 	local aspect = HIDDEN_ASPECT_ITEM_TO_NAME and HIDDEN_ASPECT_ITEM_TO_NAME[item_name]
 	if aspect then
 		GameState.WeaponsUnlocked[aspect]        = true
@@ -189,9 +145,7 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
 		return true
 	end
-	-- Prophecies: grant the same resource the vanilla quest cashout would award.
-	-- The CashOutQuest override in reload.lua suppresses the vanilla AddResource,
-	-- so this is the sole grant path for prophecy rewards.
+	-- Prophecies: grant the resource the vanilla cashout would have awarded.
 	local quest_id = PROPHECY_QUEST_FOR_ITEM and PROPHECY_QUEST_FOR_ITEM[item_name]
 	if quest_id then
 		local questData = QuestData and QuestData[quest_id]

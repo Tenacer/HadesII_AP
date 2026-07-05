@@ -8,23 +8,13 @@
 --	values and functions later defined in `reload_late.lua`.
 
 -- ── Library modules with import-time side effects ─────────────────────────────
--- These two modules do install-type work at import time that must run exactly
--- once: rivals.lua installs an IsBossDifficultyShrineUpgradeActive override via
--- modutil.mod.Path.Set (re-running a Path.Set from reload.lua is the crash
--- pattern in feedback_modutil_wrap_crash), and weapons.lua redefines the global
--- CreateNewHero and writes HeroData.DefaultWeapon. Importing them here (on_ready_late,
--- not re-run on hot-reload) keeps that work once-only. Tradeoff: their function
--- bodies can no longer be hot-edited mid-session — a full restart is needed.
--- All their consumers resolve at call time (gameplay), well after this import,
--- and after the SJSON text reads that reference WEAPON_LOCATIONS / HIDDEN_ASPECT_LOCATIONS.
+-- rivals.lua and weapons.lua do install work at import time, so they load here exactly once.
 import 'lib/rivals.lua'
 import 'lib/weapons.lua'
 
 -- ── Initial startup calls ────────────────────────────────────────────────────
 
--- These need reload.lua (imported in on_reload before on_ready_late fires).
--- Patch incantation icons + cauldron-visibility gates for the hub screen
--- before the first SetupMap wrap fires.
+-- Patch incantation icons and gates before the first SetupMap wrap fires.
 H2AP_PatchIncantationIcons()
 H2AP_PatchSurfaceIncantationReveal()
 H2AP_PatchIncantationCosts()
@@ -35,21 +25,7 @@ H2AP_FlushOutbox()
 
 -- ── GiftData fix ──────────────────────────────────────────────────────────────
 
--- Replace the dialogue prerequisites on AP-mapped keepsake gift-levels with a guard
--- so AP can trigger keepsake location checks via gifting without needing specific
--- NPC dialogue to have happened first. Runs after all mods have populated GiftData.
---
--- The keepsake gift-level stays eligible only until GameState.AP_KeepsakeChecked[gift]
--- is set (the moment the AP check fires, see ready.lua). After that GiftLogic skips
--- the level, so PlayerReceivedGiftPresentation is no longer re-called — and the AP
--- banner no longer re-shows — every time the player gifts that NPC again. The guard
--- deliberately keys off our own AP_KeepsakeChecked flag, NOT GiftPresentation, so the
--- keepsake stays "unowned" for bounty/objective/incantation requirements until AP
--- delivers it. (When keepsakesanity is off, AP_KeepsakeChecked is never set, so the
--- guard always passes and the keepsake is giftable immediately.)
---
--- Unmapped gifts (the three post-ending keepsakes) keep their vanilla requirements,
--- e.g. Hades declines gifts until the True Ending.
+-- Replace AP-mapped keepsake gift-level prerequisites with an AP_KeepsakeChecked guard so gifting works without story dialogue; unmapped (post-ending) gifts keep vanilla requirements.
 for npcName, npcData in pairs(GiftData) do
 	if type(npcData) == "table" then
 		for i = 1, #npcData do
@@ -64,22 +40,13 @@ for npcName, npcData in pairs(GiftData) do
 end
 
 -- ── Contested game-function wraps ─────────────────────────────────────────────
--- These three globals are also hooked by several other installed mods, so we
--- register our wraps here (on_ready_late, i.e. after on_all_mods_loaded) rather
--- than in ready.lua's early on_ready phase. That keeps our position in the wrap
--- chain deterministic relative to the other mods and avoids the load-order GC
--- instability described in ModUtil issue #12. The callbacks reference H2AP_*
--- globals resolved at call time (defined in reload.lua), so late registration is
--- safe. Recompute ap_icon_pkg here since ready.lua's local isn't in scope.
+-- Globals also hooked by other installed mods register here (after on_all_mods_loaded) for deterministic wrap-chain order.
 local ap_icon_pkg = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
 
--- Runs at the start of every room load: processes the AP inbox (grant queued items).
--- The inbox polling thread is started here on the first SetupMap call because
--- thread() requires SessionMapState to exist, which is only true once a map loads.
+-- Start-of-room processing; the inbox polling thread starts on the first SetupMap because thread() needs SessionMapState.
 local _polling_started = false
 modutil.mod.Path.Wrap("SetupMap", function(base, ...)
-	-- Reload the package each room (game may evict it) and re-patch icons
-	-- (hot-reloads of reload.lua reset WorldUpgradeData icon fields).
+	-- Reload the package (game may evict it) and re-patch icons each room.
 	LoadPackages({ Name = ap_icon_pkg })
 	H2AP_PatchIncantationIcons()
 	H2AP_PatchSurfaceIncantationReveal()
@@ -106,45 +73,30 @@ modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEnc
 	return result
 end)
 
--- Room-based location systems count depths here, not in OnAllEnemiesDead:
--- DoUnlockRoomExits fires once per room regardless of combat, so non-combat
--- rooms (shops/story/forced-shop PreBoss) still light their depth check.
+-- Room-based systems count depths here since DoUnlockRoomExits fires for non-combat rooms too.
 modutil.mod.Path.Wrap("DoUnlockRoomExits", function(base, run, room)
 	local result = base(run, room)
 	H2AP_OnRoomExitsUnlocked(room)
 	return result
 end)
 
--- Arachne cocoon rooms never call OnAllEnemiesDead: their encounter event set is
--- { BeginArachneEncounter, WaitForArachneRewardFound } (see EncounterSets.lua),
--- ending when the reward cocoon's death fires the "ArachneRewardFound" notify that
--- WaitForArachneRewardFound is blocked on — there's no CheckForAllEnemiesDead in the
--- chain. So we score these rooms here, once WaitForArachneRewardFound unblocks (the
--- room is cleared). No double-count risk since OnAllEnemiesDead never runs for them.
+-- Arachne cocoon rooms never call OnAllEnemiesDead, so score them when WaitForArachneRewardFound unblocks.
 modutil.mod.Path.Wrap("WaitForArachneRewardFound", function(base, encounter)
 	local result = base(encounter)
 	local room = CurrentRun and CurrentRun.CurrentRoom
-	H2AP_OnRoomCleared(room, encounter)        -- score_based scoring + boss handling
-	H2AP_OnRoomExitsUnlocked(room)             -- room_based depth check (dedup-safe)
+	H2AP_OnRoomCleared(room, encounter)
+	H2AP_OnRoomExitsUnlocked(room)
 	return result
 end)
 
--- KillHero is the hero-specific death handler in DeathLoopLogic.lua.
--- Kill() calls it only when victim == CurrentRun.Hero, so this fires exactly
--- once per Melinoë death and not for enemy deaths.
+-- KillHero fires exactly once per Melinoë death.
 modutil.mod.Path.Wrap("KillHero", function(base, victim, triggerArgs)
 	local result = base(victim, triggerArgs)
 	H2AP_OnMelinoeDied()
 	return result
 end)
 
--- Weapon / hidden aspect / tool sanity: suppress the vanilla weapon/aspect/tool
--- unlock when the corresponding sanity option is on. Player still pays cost;
--- AddWorldUpgrade and the equip thread are skipped. H2AP_GiveItem handles the real
--- unlock when the AP item arrives. WorldUpgradesAdded is set so the slot shows as
--- purchased and can't be re-bought. Tools (ToolPickaxe etc.) sell through this same
--- WeaponShop screen, so they ride the same interception when toolsanity is on.
--- Contested: BountyAPI / Zagreus_Journey also touch the shop, so this registers late.
+-- Weapon/aspect/tool sanity: suppress the vanilla shop unlock (player still pays), fire the check, and let H2AP_GiveItem deliver the real unlock.
 modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 	local settings = H2AP_LoadSettings()
 	local itemData = button and button.Data
@@ -156,9 +108,7 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 		elseif settings.hidden_aspectsanity == 1 and HIDDEN_ASPECT_LOCATIONS[item_name] then
 			ap_location = HIDDEN_ASPECT_LOCATIONS[item_name]
 		elseif settings.toolsanity == 1 and TOOL_LOCATIONS[item_name] then
-			-- Tools share the WeaponShop screen; item_name is the internal tool key
-			-- (e.g. "ToolPickaxe"). Suppress the vanilla unlock and fire the check;
-			-- H2AP_GiveItem grants the actual tool when the AP item arrives.
+			-- Tools share the WeaponShop screen.
 			ap_location = TOOL_LOCATIONS[item_name]
 		end
 		if ap_location then
@@ -193,11 +143,7 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 				Destroy({ Id = screen.Components["Icon" .. button.Index].Id })
 				screen.Components["Icon" .. button.Index] = nil
 			end
-			-- Pass the CloseButton (not the purchase button) so
-			-- WeaponShopScreenCloseFinishedPresentation takes the close-button
-			-- branch and pans the camera back to Melinoë. Passing the purchase
-			-- button skips that branch and the camera stays stuck on the shop.
-			-- (Same root cause + fix as the cauldron CloseGhostAdminScreen case.)
+			-- Pass the CloseButton so the camera pans back to Melinoë instead of staying stuck on the shop.
 			CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
 			H2AP_CheckLocation(ap_location)
 			H2AP_ShowBossRewardBanner()
@@ -207,11 +153,7 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 	return base(screen, button)
 end)
 
--- StartNewRun: apply persistent run-start helpers after vanilla finishes.
---   • Initial Money helper: extra Money on top of CalculateStartingMoney
---   • Max Health helper: re-sync the cumulative bonus onto the fresh hero
--- Contested — MelSkin, Zagreus_Journey and BountyAPI all wrap StartNewRun — so
--- this registers in ready_late for deterministic chain order.
+-- StartNewRun: apply the Money and Max Health helpers after vanilla finishes.
 modutil.mod.Path.Wrap("StartNewRun", function(base, prevRun, args)
 	local result = base(prevRun, args)
 	pcall(H2AP_ApplyMaxHealthHelper)
@@ -219,10 +161,7 @@ modutil.mod.Path.Wrap("StartNewRun", function(base, prevRun, args)
 	return result
 end)
 
--- GetRarityChances: add an additive percentage to the Rare and Epic buckets only,
--- from the accumulated Boon Boost Helpers. We deliberately leave the other rarities
--- alone — Duo/Legendary/Heroic carry their own gameplay balance and Common is the
--- inert fallback. Contested by boon-rarity mods, so registered late.
+-- GetRarityChances: add the accumulated Boon Boost percentage to the Rare and Epic buckets only.
 local AP_BOON_BOOST_RARITIES = { "Rare", "Epic" }
 modutil.mod.Path.Wrap("GetRarityChances", function(base, loot)
 	local rarityChances = base(loot)

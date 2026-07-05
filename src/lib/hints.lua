@@ -2,10 +2,7 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Hint dispatch ─────────────────────────────────────────────────────────────
--- Cumulative list of AP location names we've asked the Python client to hint.
--- Persists in ap_state.json so we never re-hint the same location, even across
--- game restarts. Python client dedupes again via its own session set, then sends
--- LocationScouts with create_as_hint=2 (free hint, no point cost).
+-- Persisted, deduped list of locations the Python client should hint (LocationScouts create_as_hint=2).
 
 function H2AP_HintLocation(name)
 	local state = H2AP_LoadState()
@@ -21,10 +18,6 @@ function H2AP_HintLocation(name)
 end
 
 -- ── Cauldron: hint visible incantations on category display ───────────────────
--- screen.AvailableItems is populated by GhostAdminDisplayCategory and contains
--- exactly the WorldUpgradeData entries shown in the active tab (excludes purchased
--- non-repeatable items + reveal-capped items). We hint each one whose key is in
--- INCANTATION_LOCATIONS.
 
 function H2AP_HintCauldronVisible(screen)
 	local settings = H2AP_LoadSettings()
@@ -37,9 +30,7 @@ function H2AP_HintCauldronVisible(screen)
 		local name = itemData and itemData.Name
 		local ap_location = name and INCANTATION_LOCATIONS[name]
 		if ap_location then
-			-- Hint AP-keyed incantations always (when their toggle is on); hint
-			-- the other 86 only under cauldronsanity. Skip surface/goal keys
-			-- entirely when their toggle is off — they're not AP locations.
+			-- Hint AP-keyed incantations always, the other 86 only under cauldronsanity.
 			local should_hint
 			if keyed[name] then
 				should_hint = true
@@ -56,9 +47,6 @@ function H2AP_HintCauldronVisible(screen)
 end
 
 -- ── Quest log: hint visible (non-cashed-out) prophecies on screen open ────────
--- Mirrors OpenQuestLogScreen's filter: a quest is shown when its status is not
--- "CashedOut" AND its UnlockGameStateRequirements are met. CashedOut quests have
--- already had their AP check sent so hinting them adds nothing.
 
 function H2AP_HintQuestlogVisible()
 	local settings = H2AP_LoadSettings()
@@ -78,10 +66,7 @@ function H2AP_HintQuestlogVisible()
 end
 
 -- ── Quest completion: poll for cashed-out prophecies ─────────────────────────
--- Backstop for the CashOutQuest override (reload.lua). The override fires the
--- AP check the moment the player clicks cashout; this poll catches anything
--- that slipped through (mod reload mid-cashout, save-state edge cases) on the
--- next H2AP_SetupMap. H2AP_CheckLocation is idempotent.
+-- Backstop for the CashOutQuest override, catching any cashout that slipped through.
 
 function H2AP_CheckQuestCompletions()
 	local settings = H2AP_LoadSettings()

@@ -62,11 +62,7 @@ function H2AP_LoadState()
 		if type(_state.weapon_clears) ~= "table" then
 			_state.weapon_clears = {}
 		end
-		-- Migration: legacy saves only have a single combined `score`. Seed the
-		-- per-route sub-scores from it so an in-progress run keeps its earned
-		-- checks. We can't recover the true per-route split, so attribute the
-		-- whole legacy score to the underworld route (the earlier route — the
-		-- conservative choice, as the surface budget is the smaller one).
+		-- Migration: attribute a legacy combined score entirely to the underworld route.
 		if type(_state.score_underworld) ~= "number" then
 			_state.score_underworld = _state.score or 0
 		end

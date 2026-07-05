@@ -4,16 +4,10 @@
 -- ── Prophecy (Fated List Quest) locations ─────────────────────────────────────
 
 -- Maps internal Quest ID → AP location name (= Fated List Quest display name + " Check").
--- Used in sjson_HelpText to patch DisplayName + Description for prophecy entries
--- when fatesanity is on. Generated from HelpText.en.sjson Quest* entries
--- cross-referenced with locations.csv (category = "prophecy").
 PROPHECY_LOCATIONS = {
 	["QuestDarkSorceries"]                       = "Gifts of the Moon Check",
 	["QuestPurchasePinnedItems"]                 = "Note to Self Check",
-	-- QuestRescueFates / *PostTrueEnding / *Progress / *True intentionally
-	-- excluded: it's a single QuestData entry whose Name field rotates through
-	-- 4 stages via SetupEvents, and the final Find Us stage requires the
-	-- post-True-Ending FatesEpilogue01 text-line — i.e. post-goal, soft-lock-prone.
+	-- QuestRescueFates stages intentionally excluded: the final stage is post-True-Ending and soft-lock-prone.
 	["QuestZeusUpgrades"]                        = "Master of the Heavens Check",
 	["QuestPoseidonUpgrades"]                    = "Master of the Sea Check",
 	["QuestApolloUpgrades"]                      = "Master of Light Check",
@@ -51,10 +45,7 @@ PROPHECY_LOCATIONS = {
 	["QuestUnlockMoros"]                         = "Harbinger of Doom Check",
 	["QuestPetFrog"]                             = "Familiar Confidant Check",
 	["QuestMeetCyclopsWithOdysseusKeepsake"]     = "Nobody but Nobody Check",
-	-- QuestHelpOdysseus intentionally excluded: UnlockGameStateRequirements
-	-- requires ReachedTrueEnding (post-goal in TrueEnding mode, unreachable in
-	-- BossDefeats mode). Same precedent as the removed RescueFates stages —
-	-- AP item ID 114 and location ID 2644 retired (do not reuse).
+	-- QuestHelpOdysseus intentionally excluded (post-goal gate); its retired AP item ID 114 / location ID 2644 must not be reused.
 	["QuestHelpArachne"]                         = "Silk and Spitefulness Check",
 	["QuestHelpNarcissusAndEcho"]                = "Voice and Vanity Check",
 	["QuestHelpDora"]                            = "Haunted by the Past Check",
@@ -102,8 +93,7 @@ PROPHECY_LOCATIONS = {
 	["QuestEliteAttributeKills"]                 = "Bared Fangs Check",
 }
 
--- Reverse: AP item name → quest id. Item names follow the pattern
--- "<location minus ' Check'> Reward" — see worlds/hades_ii/data/items.csv.
+-- Reverse: AP item name ("<location minus ' Check'> Reward") → quest id.
 PROPHECY_QUEST_FOR_ITEM = {}
 for quest_id, location in pairs(PROPHECY_LOCATIONS) do
 	local base = location:gsub(" Check$", "")

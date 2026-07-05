@@ -2,8 +2,7 @@
 ---@diagnostic disable: lowercase-global
 
 -- ── Settings (written by Python client on AP connect) ─────────────────────────
--- Cached once the file is found; nil if the file doesn't exist yet (retried on
--- every call). _settings is reset to nil on each hot-reload / room transition.
+-- Cached once the file is found; retried on every call until then.
 
 local _settings = nil
 
@@ -11,8 +10,7 @@ function H2AP_LoadSettings()
 	if _settings then return _settings end
 	local f = io.open(H2AP_Dir() .. "ap_settings.json", "r")
 	if not f then
-		-- Don't cache — return empty without setting _settings so the next call
-		-- retries. The Python client may not have connected yet.
+		-- Don't cache so the next call retries (the client may not have connected yet).
 		return {}
 	end
 	local raw = f:read("*a")
