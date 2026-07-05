@@ -158,7 +158,7 @@ end
 -- OnUsed handler for the AP-boss-reward obstacles. Reads the AP location name
 -- attached to the obstacle (set in H2AP_SpawnApBossReward) and sends the
 -- check. Idempotent — H2AP_CheckLocation dedupes against state.checked_locations.
-function H2AP_OnBossDropUsed(usee, args)
+function H2AP_OnBossDropUsed(usee, args, user)
 	if usee and usee.APLocation then
 		print("[HadesII_AP] Boss reward picked up — sending " .. usee.APLocation)
 		H2AP_CheckLocation(usee.APLocation)
@@ -168,9 +168,12 @@ function H2AP_OnBossDropUsed(usee, args)
 	-- nilled AddResources, so calling it here is a clean no-op apart from the
 	-- standard consume bookkeeping (Destroy, ConsumeSound, etc).
 	if UseConsumableItem then
-		UseConsumableItem(usee, args)
+		UseConsumableItem(usee, args, user)
 	end
 end
+
+-- OnUsedFunctionName resolves via the game's _G, so publish the handler there.
+game.H2AP_OnBossDropUsed = H2AP_OnBossDropUsed
 
 -- Spawn the boss reward obstacle for an AP-check kill. Decides the visual
 -- (matching resource drop, or AP-icon-overridden carrier) based on the
