@@ -145,6 +145,19 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
 		return true
 	end
+	-- Base + standard aspects: same WeaponsUnlocked delivery as hidden aspects.
+	local base_std = (STANDARD_ASPECT_ITEM_TO_NAME and STANDARD_ASPECT_ITEM_TO_NAME[item_name])
+		or (BASE_ASPECT_ITEM_TO_NAME and BASE_ASPECT_ITEM_TO_NAME[item_name])
+	if base_std then
+		GameState.WeaponsUnlocked[base_std] = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[base_std] = true
+		end
+		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
+		print("[HadesII_AP] Gave aspect: " .. item_name .. " (" .. base_std .. ")")
+		return true
+	end
 	-- Prophecies: grant the resource the vanilla cashout would have awarded.
 	local quest_id = PROPHECY_QUEST_FOR_ITEM and PROPHECY_QUEST_FOR_ITEM[item_name]
 	if quest_id then

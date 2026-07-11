@@ -74,6 +74,164 @@ HIDDEN_ASPECT_ITEM_TO_NAME = {
 	["Shiva Aspect Unlock"]    = "SuitComboAspect",
 }
 
+-- ── Aspect sanity: base + standard aspects (aspectsanity) ─────────────────────
+
+-- Game internal standard aspect trait → AP location name.
+STANDARD_ASPECT_LOCATIONS = {
+	StaffClearCastAspect     = "Staff Weapon Circe Aspect Unlock Location",
+	StaffSelfHitAspect       = "Staff Weapon Momus Aspect Unlock Location",
+	DaggerBlockAspect        = "Daggers Weapon Artemis Aspect Unlock Location",
+	DaggerHomingThrowAspect  = "Daggers Weapon Pan Aspect Unlock Location",
+	TorchDetonateAspect      = "Torches Weapon Moros Aspect Unlock Location",
+	TorchSprintRecallAspect  = "Torches Weapon Eos Aspect Unlock Location",
+	AxeArmCastAspect         = "Axe Weapon Charon Aspect Unlock Location",
+	AxePerfectCriticalAspect = "Axe Weapon Thanatos Aspect Unlock Location",
+	LobCloseAttackAspect     = "Skull Weapon Medea Aspect Unlock Location",
+	LobImpulseAspect         = "Skull Weapon Persephone Aspect Unlock Location",
+	SuitMarkCritAspect       = "Coat Weapon Nyx Aspect Unlock Location",
+	SuitHexAspect            = "Coat Weapon Selene Aspect Unlock Location",
+}
+
+-- AP item name → game internal standard aspect trait (keys match items.csv).
+STANDARD_ASPECT_ITEM_TO_NAME = {
+	["Circe Aspect Unlock"]      = "StaffClearCastAspect",
+	["Momus Aspect Unlock"]      = "StaffSelfHitAspect",
+	["Artemis Aspect Unlock"]    = "DaggerBlockAspect",
+	["Pan Aspect Unlock"]        = "DaggerHomingThrowAspect",
+	["Moros Aspect Unlock"]      = "TorchDetonateAspect",
+	["Eos Aspect Unlock"]        = "TorchSprintRecallAspect",
+	["Charon Aspect Unlock"]     = "AxeArmCastAspect",
+	["Thanatos Aspect Unlock"]   = "AxePerfectCriticalAspect",
+	["Medea Aspect Unlock"]      = "LobCloseAttackAspect",
+	["Persephone Aspect Unlock"] = "LobImpulseAspect",
+	["Nyx Aspect Unlock"]        = "SuitMarkCritAspect",
+	["Selene Aspect Unlock"]     = "SuitHexAspect",
+}
+
+-- Game internal base aspect trait → AP location name.
+BASE_ASPECT_LOCATIONS = {
+	BaseStaffAspect            = "Staff Weapon Melinoe Aspect Unlock Location",
+	DaggerBackstabAspect       = "Daggers Weapon Melinoe Aspect Unlock Location",
+	TorchSpecialDurationAspect = "Torches Weapon Melinoe Aspect Unlock Location",
+	AxeRecoveryAspect          = "Axe Weapon Melinoe Aspect Unlock Location",
+	LobAmmoBoostAspect         = "Skull Weapon Melinoe Aspect Unlock Location",
+	BaseSuitAspect             = "Coat Weapon Melinoe Aspect Unlock Location",
+}
+
+-- AP item name → game internal base aspect trait (keys match items.csv).
+BASE_ASPECT_ITEM_TO_NAME = {
+	["Staff Melinoe Aspect Unlock"]   = "BaseStaffAspect",
+	["Daggers Melinoe Aspect Unlock"] = "DaggerBackstabAspect",
+	["Torches Melinoe Aspect Unlock"] = "TorchSpecialDurationAspect",
+	["Axe Melinoe Aspect Unlock"]     = "AxeRecoveryAspect",
+	["Skull Melinoe Aspect Unlock"]   = "LobAmmoBoostAspect",
+	["Coat Melinoe Aspect Unlock"]    = "BaseSuitAspect",
+}
+
+-- Base aspect trait → { weapon, Bones cost } for the injected purchasable shop entry.
+BASE_ASPECT_SHOP = {
+	BaseStaffAspect            = { weapon = "WeaponStaffSwing", cost = 100 },
+	DaggerBackstabAspect       = { weapon = "WeaponDagger",     cost = 150 },
+	TorchSpecialDurationAspect = { weapon = "WeaponTorch",      cost = 200 },
+	AxeRecoveryAspect          = { weapon = "WeaponAxe",        cost = 250 },
+	LobAmmoBoostAspect         = { weapon = "WeaponLob",        cost = 300 },
+	BaseSuitAspect             = { weapon = "WeaponSuit",       cost = 350 },
+}
+
+-- initial_weapon slot → ordered [base, first standard, second standard] traits.
+-- Index into the slot matches the initial_aspect option (0=base, 1/2=standards).
+ASPECT_BY_WEAPON = {
+	[0] = { "BaseStaffAspect",            "StaffClearCastAspect",  "StaffSelfHitAspect" },
+	[1] = { "DaggerBackstabAspect",       "DaggerBlockAspect",     "DaggerHomingThrowAspect" },
+	[2] = { "TorchSpecialDurationAspect", "TorchDetonateAspect",   "TorchSprintRecallAspect" },
+	[3] = { "AxeRecoveryAspect",          "AxeArmCastAspect",      "AxePerfectCriticalAspect" },
+	[4] = { "LobAmmoBoostAspect",         "LobCloseAttackAspect",  "LobImpulseAspect" },
+	[5] = { "BaseSuitAspect",             "SuitMarkCritAspect",    "SuitHexAspect" },
+}
+
+-- The starting aspect trait (granted, not a check), or nil when aspect sanity is off.
+function H2AP_InitialAspectTrait()
+	local s = H2AP_LoadSettings()
+	if not (s and s.aspectsanity == 1) then return nil end
+	local slot = ASPECT_BY_WEAPON[s.initial_weapon or 0]
+	return slot and slot[(s.initial_aspect or 0) + 1]
+end
+
+-- Returns the ScreenData.WeaponShop category that owns a weapon.
+local function weapon_shop_category(weaponName)
+	if not (ScreenData and ScreenData.WeaponShop and ScreenData.WeaponShop.ItemCategories) then return nil end
+	for _, category in ipairs(ScreenData.WeaponShop.ItemCategories) do
+		if category.WeaponName == weaponName then return category end
+	end
+	return nil
+end
+
+-- Inject the base aspects as purchasable shop entries (Bones = MetaCurrency) and stop the
+-- free FreeUnlocks grant so each becomes an AP check. Idempotent; the starting aspect is skipped.
+function H2AP_InitBaseAspectShop()
+	if GameState == nil then return end
+	local s = H2AP_LoadSettings()
+	if not (s and s.aspectsanity == 1 and WeaponShopItemData) then return end
+	local start_trait = H2AP_InitialAspectTrait()
+	for trait, data in pairs(BASE_ASPECT_SHOP) do
+		if trait ~= start_trait then
+			if WeaponShopItemData[trait] == nil then
+				WeaponShopItemData[trait] = {
+					WeaponName = data.weapon,
+					HideAfterPurchased = true,
+					IconScale = 0.8,
+					UnlockTextId = "WeaponShopAspectUnlock",
+					Cost = { MetaCurrency = data.cost },
+					GameStateRequirements = {
+						{ PathTrue = { "GameState", "WorldUpgrades", "WorldUpgradeWeaponUpgradeSystem" } },
+					},
+				}
+			end
+			local category = weapon_shop_category(data.weapon)
+			if category then
+				local present = false
+				for _, name in ipairs(category) do
+					if name == trait then present = true break end
+				end
+				if not present then table.insert(category, 1, trait) end
+			end
+		end
+	end
+	-- Suppress the free base-aspect auto-grant (WeaponUpgradeLogic.OpenWeaponUpgradeScreen).
+	if ScreenData and ScreenData.WeaponUpgradeScreen and ScreenData.WeaponUpgradeScreen.FreeUnlocks then
+		for _, data in pairs(BASE_ASPECT_SHOP) do
+			ScreenData.WeaponUpgradeScreen.FreeUnlocks[data.weapon] = nil
+		end
+	end
+end
+
+-- Grant the chosen starting aspect for the initial weapon so it is playable, and mark it
+-- already-obtained so its shop slot never appears as a check.
+function H2AP_GrantInitialAspect()
+	if GameState == nil then return end
+	local trait = H2AP_InitialAspectTrait()
+	if not trait then return end
+	GameState.WeaponsUnlocked[trait]        = true
+	GameState.WorldUpgradesAdded[trait]     = true
+	GameState.WorldUpgradesViewed[trait]    = true
+	GameState.WorldUpgradesRevealed[trait]  = true
+	if CurrentRun then
+		CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+		CurrentRun.WeaponsUnlocked[trait] = true
+	end
+end
+
+-- QoL: grant the weapon aspect purchase system from the start (aspect_system_unlocked).
+function H2AP_ApplyAspectSystemUnlock()
+	if GameState == nil then return end
+	local s = H2AP_LoadSettings()
+	if not (s and s.aspect_system_unlocked == 1) then return end
+	GameState.WorldUpgrades.WorldUpgradeWeaponUpgradeSystem         = true
+	GameState.WorldUpgradesAdded.WorldUpgradeWeaponUpgradeSystem    = true
+	GameState.WorldUpgradesViewed.WorldUpgradeWeaponUpgradeSystem   = true
+	GameState.WorldUpgradesRevealed.WorldUpgradeWeaponUpgradeSystem = true
+end
+
 local settings = H2AP_LoadSettings()
 local target = settings and AP_STARTING_WEAPONS[settings.initial_weapon or 0]
 

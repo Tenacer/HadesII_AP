@@ -105,6 +105,10 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 			ap_location = WEAPON_LOCATIONS[item_name]
 		elseif settings.hidden_aspectsanity == 1 and HIDDEN_ASPECT_LOCATIONS[item_name] then
 			ap_location = HIDDEN_ASPECT_LOCATIONS[item_name]
+		elseif settings.aspectsanity == 1 and STANDARD_ASPECT_LOCATIONS[item_name] then
+			ap_location = STANDARD_ASPECT_LOCATIONS[item_name]
+		elseif settings.aspectsanity == 1 and BASE_ASPECT_LOCATIONS[item_name] then
+			ap_location = BASE_ASPECT_LOCATIONS[item_name]
 		elseif settings.toolsanity == 1 and TOOL_LOCATIONS[item_name] then
 			-- Tools share the WeaponShop screen.
 			ap_location = TOOL_LOCATIONS[item_name]
@@ -120,8 +124,10 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 				return
 			end
 			for resourceName, resourceCost in pairs(itemData.Cost) do
+				-- Base aspects cost MetaCurrency (Bones), which may lack a cost-icon backing.
+				local backing = screen.Components["ResourceIconBacking" .. resourceName]
 				SpendResource(resourceName, resourceCost, metaUpgradeName, {
-					TargetId = screen.Components["ResourceIconBacking" .. resourceName].Id,
+					TargetId = backing and backing.Id,
 					UseScreenLocation = true,
 					TextOffsetY = 11, TextAnchorOffsetY = -50,
 					HoldDuration = 0, FadeOutDuration = 0.2,

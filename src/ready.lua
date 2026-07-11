@@ -254,10 +254,10 @@ end)
 
 -- ── Hidden aspect unlock tracking ────────────────────────────────────────────
 
--- Hidden aspectsanity: re-point HasAnyAspectUnlocked at WeaponsUnlocked so the kit prompt tracks the AP item, not the shop check.
+-- Aspect sanity: re-point HasAnyAspectUnlocked at WeaponsUnlocked so the kit prompt tracks the AP item, not the shop check.
 modutil.mod.Path.Wrap("HasAnyAspectUnlocked", function(base, weaponName)
 	local settings = H2AP_LoadSettings()
-	if not (settings and settings.hidden_aspectsanity == 1) then
+	if not (settings and (settings.hidden_aspectsanity == 1 or settings.aspectsanity == 1)) then
 		return base(weaponName)
 	end
 	for traitName, traitData in pairs(TraitSetData.Aspects) do
