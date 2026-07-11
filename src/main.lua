@@ -61,15 +61,6 @@ local function on_ready_late()
 	import 'ready_late.lua'
 end
 
-local function on_reload_late()
-	-- what to do when we are ready after all other mods
-	--   but also again on every reload.
-	-- only do things that are safe to run over and over.
-	if config.enabled == false then return end
-
-	import 'reload_late.lua'
-end
-
 -- this allows us to limit certain functions to not be reloaded.
 local loader = reload.auto_multiple()
 
@@ -81,6 +72,6 @@ end)
 -- again but loaded later than other mods
 mods.on_all_mods_loaded(function()
 	modutil.once_loaded.game(function()
-		loader.load("late", on_ready_late, on_reload_late)
+		loader.load("late", on_ready_late)
 	end)
 end)
