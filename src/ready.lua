@@ -7,7 +7,6 @@
 
 import 'lib/json.lua'
 import 'lib/ipc.lua'
-import 'lib/settings.lua'
 import 'lib/state.lua'
 import 'lib/IncantationData.lua'
 import 'lib/ProphecyData.lua'
