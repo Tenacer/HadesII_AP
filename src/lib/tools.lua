@@ -6,16 +6,16 @@
 
 -- AP item name → game internal tool name (keys match items.csv exactly).
 TOOL_ITEM_TO_NAME = {
-	["Crescent Pickaxe Tool Unlock"] = "ToolPickaxe",
-	["Silver Spade Tool Unlock"]     = "ToolShovel",
-	["Tablet of Peace Tool Unlock"]  = "ToolExorcismBook",
-	["Rod of Fishing Tool Unlock"]   = "ToolFishingRod",
+	["Crescent Pickaxe"] = "ToolPickaxe",
+	["Silver Spade"]     = "ToolShovel",
+	["Tablet of Peace"]  = "ToolExorcismBook",
+	["Rod of Fishing"]   = "ToolFishingRod",
 }
 
 -- Game internal tool name → AP location name (keyed off WeaponShop itemData.Name).
 TOOL_LOCATIONS = {
-	ToolPickaxe      = "Crescent Pickaxe Tool Unlock Location",
-	ToolShovel       = "Silver Spade Tool Unlock Location",
-	ToolExorcismBook = "Tablet of Peace Tool Unlock Location",
-	ToolFishingRod   = "Rod of Fishing Tool Unlock Location",
+	ToolPickaxe      = "Crescent Pickaxe",
+	ToolShovel       = "Silver Spade",
+	ToolExorcismBook = "Tablet of Peace",
+	ToolFishingRod   = "Rod of Fishing",
 }

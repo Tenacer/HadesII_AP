@@ -6,20 +6,20 @@
 
 -- Game internal familiar name → AP location name.
 FAMILIAR_LOCATIONS = {
-	FrogFamiliar    = "Frinos Familiar Unlock Location",
-	RavenFamiliar   = "Raki Familiar Unlock Location",
-	CatFamiliar     = "Toula Familiar Unlock Location",
-	HoundFamiliar   = "Hecuba Familiar Unlock Location",
-	PolecatFamiliar = "Gale Familiar Unlock Location",
+	FrogFamiliar    = "Frinos",
+	RavenFamiliar   = "Raki",
+	CatFamiliar     = "Toula",
+	HoundFamiliar   = "Hecuba",
+	PolecatFamiliar = "Gale",
 }
 
 -- AP item name → game internal familiar name (keys must match items.csv exactly).
 FAMILIAR_ITEM_TO_NAME = {
-	["Frinos Familiar"] = "FrogFamiliar",
-	["Raki Familiar"]   = "RavenFamiliar",
-	["Toula Familiar"]  = "CatFamiliar",
-	["Hecuba Familiar"] = "HoundFamiliar",
-	["Gale Familiar"]   = "PolecatFamiliar",
+	["Frinos"] = "FrogFamiliar",
+	["Raki"]   = "RavenFamiliar",
+	["Toula"]  = "CatFamiliar",
+	["Hecuba"] = "HoundFamiliar",
+	["Gale"]   = "PolecatFamiliar",
 }
 
 -- Gate the wild encounter on AP_FamiliarChecked instead of FamiliarsUnlocked; idempotent and safe on every SetupMap.

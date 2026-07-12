@@ -16,12 +16,12 @@ AP_STARTING_WEAPONS = {
 
 -- Game internal weapon name → AP location name (for HandleWeaponShopPurchase wrap).
 WEAPON_LOCATIONS = {
-	WeaponStaffSwing = "Staff Weapon Unlock Location",
-	WeaponDagger     = "Daggers Weapon Unlock Location",
-	WeaponTorch      = "Torches Weapon Unlock Location",
-	WeaponAxe        = "Axe Weapon Unlock Location",
-	WeaponLob        = "Skull Weapon Unlock Location",
-	WeaponSuit       = "Coat Weapon Unlock Location",
+	WeaponStaffSwing = "Witch's Staff",
+	WeaponDagger     = "Sister Blades",
+	WeaponTorch      = "Umbral Flames",
+	WeaponAxe        = "Moonstone Axe",
+	WeaponLob        = "Argent Skull",
+	WeaponSuit       = "Black Coat",
 }
 
 -- Game internal weapon name → AP "<Weapon> Clear" location name (fired on that weapon's first final-boss clear).
@@ -46,86 +46,86 @@ WEAPON_SHORT = {
 
 -- AP item name → game internal weapon name (keys match items.csv exactly).
 WEAPON_ITEM_TO_NAME = {
-	["Staff Weapon Unlock"]   = "WeaponStaffSwing",
-	["Daggers Weapon Unlock"] = "WeaponDagger",
-	["Torches Weapon Unlock"] = "WeaponTorch",
-	["Axe Weapon Unlock"]     = "WeaponAxe",
-	["Skull Weapon Unlock"]   = "WeaponLob",
-	["Coat Weapon Unlock"]    = "WeaponSuit",
+	["Witch's Staff"]   = "WeaponStaffSwing",
+	["Sister Blades"] = "WeaponDagger",
+	["Umbral Flames"] = "WeaponTorch",
+	["Moonstone Axe"]     = "WeaponAxe",
+	["Argent Skull"]   = "WeaponLob",
+	["Black Coat"]    = "WeaponSuit",
 }
 
 -- Game internal aspect name → AP location name.
 HIDDEN_ASPECT_LOCATIONS = {
-	StaffRaiseDeadAspect = "Staff Weapon Anubis Aspect Unlock Location",
-	DaggerTripleAspect   = "Daggers Weapon Morrigan Aspect Unlock Location",
-	TorchAutofireAspect  = "Torches Weapon Supay Aspect Unlock Location",
-	AxeRallyAspect       = "Axe Weapon Nergal Aspect Unlock Location",
-	LobGunAspect         = "Skull Weapon Hel Aspect Unlock Location",
-	SuitComboAspect      = "Coat Weapon Shiva Aspect Unlock Location",
+	StaffRaiseDeadAspect = "Anubis",
+	DaggerTripleAspect   = "Morrigan",
+	TorchAutofireAspect  = "Supay",
+	AxeRallyAspect       = "Nergal",
+	LobGunAspect         = "Hel",
+	SuitComboAspect      = "Shiva",
 }
 
 -- AP item name → game internal aspect name (keys match items.csv exactly).
 HIDDEN_ASPECT_ITEM_TO_NAME = {
-	["Anubis Aspect Unlock"]   = "StaffRaiseDeadAspect",
-	["Morrigan Aspect Unlock"] = "DaggerTripleAspect",
-	["Supay Aspect Unlock"]    = "TorchAutofireAspect",
-	["Nergal Aspect Unlock"]   = "AxeRallyAspect",
-	["Hel Aspect Unlock"]      = "LobGunAspect",
-	["Shiva Aspect Unlock"]    = "SuitComboAspect",
+	["Anubis"]   = "StaffRaiseDeadAspect",
+	["Morrigan"] = "DaggerTripleAspect",
+	["Supay"]    = "TorchAutofireAspect",
+	["Nergal"]   = "AxeRallyAspect",
+	["Hel"]      = "LobGunAspect",
+	["Shiva"]    = "SuitComboAspect",
 }
 
 -- ── Aspect sanity: base + standard aspects (aspectsanity) ─────────────────────
 
 -- Game internal standard aspect trait → AP location name.
 STANDARD_ASPECT_LOCATIONS = {
-	StaffClearCastAspect     = "Staff Weapon Circe Aspect Unlock Location",
-	StaffSelfHitAspect       = "Staff Weapon Momus Aspect Unlock Location",
-	DaggerBlockAspect        = "Daggers Weapon Artemis Aspect Unlock Location",
-	DaggerHomingThrowAspect  = "Daggers Weapon Pan Aspect Unlock Location",
-	TorchDetonateAspect      = "Torches Weapon Moros Aspect Unlock Location",
-	TorchSprintRecallAspect  = "Torches Weapon Eos Aspect Unlock Location",
-	AxeArmCastAspect         = "Axe Weapon Charon Aspect Unlock Location",
-	AxePerfectCriticalAspect = "Axe Weapon Thanatos Aspect Unlock Location",
-	LobCloseAttackAspect     = "Skull Weapon Medea Aspect Unlock Location",
-	LobImpulseAspect         = "Skull Weapon Persephone Aspect Unlock Location",
-	SuitMarkCritAspect       = "Coat Weapon Nyx Aspect Unlock Location",
-	SuitHexAspect            = "Coat Weapon Selene Aspect Unlock Location",
+	StaffClearCastAspect     = "Circe",
+	StaffSelfHitAspect       = "Momus",
+	DaggerBlockAspect        = "Artemis",
+	DaggerHomingThrowAspect  = "Pan",
+	TorchDetonateAspect      = "Moros",
+	TorchSprintRecallAspect  = "Eos",
+	AxeArmCastAspect         = "Charon",
+	AxePerfectCriticalAspect = "Thanatos",
+	LobCloseAttackAspect     = "Medea",
+	LobImpulseAspect         = "Persephone",
+	SuitMarkCritAspect       = "Nyx",
+	SuitHexAspect            = "Selene",
 }
 
 -- AP item name → game internal standard aspect trait (keys match items.csv).
 STANDARD_ASPECT_ITEM_TO_NAME = {
-	["Circe Aspect Unlock"]      = "StaffClearCastAspect",
-	["Momus Aspect Unlock"]      = "StaffSelfHitAspect",
-	["Artemis Aspect Unlock"]    = "DaggerBlockAspect",
-	["Pan Aspect Unlock"]        = "DaggerHomingThrowAspect",
-	["Moros Aspect Unlock"]      = "TorchDetonateAspect",
-	["Eos Aspect Unlock"]        = "TorchSprintRecallAspect",
-	["Charon Aspect Unlock"]     = "AxeArmCastAspect",
-	["Thanatos Aspect Unlock"]   = "AxePerfectCriticalAspect",
-	["Medea Aspect Unlock"]      = "LobCloseAttackAspect",
-	["Persephone Aspect Unlock"] = "LobImpulseAspect",
-	["Nyx Aspect Unlock"]        = "SuitMarkCritAspect",
-	["Selene Aspect Unlock"]     = "SuitHexAspect",
+	["Circe"]      = "StaffClearCastAspect",
+	["Momus"]      = "StaffSelfHitAspect",
+	["Artemis"]    = "DaggerBlockAspect",
+	["Pan"]        = "DaggerHomingThrowAspect",
+	["Moros"]      = "TorchDetonateAspect",
+	["Eos"]        = "TorchSprintRecallAspect",
+	["Charon"]     = "AxeArmCastAspect",
+	["Thanatos"]   = "AxePerfectCriticalAspect",
+	["Medea"]      = "LobCloseAttackAspect",
+	["Persephone"] = "LobImpulseAspect",
+	["Nyx"]        = "SuitMarkCritAspect",
+	["Selene"]     = "SuitHexAspect",
 }
 
 -- Game internal base aspect trait → AP location name.
 BASE_ASPECT_LOCATIONS = {
-	BaseStaffAspect            = "Staff Weapon Melinoe Aspect Unlock Location",
-	DaggerBackstabAspect       = "Daggers Weapon Melinoe Aspect Unlock Location",
-	TorchSpecialDurationAspect = "Torches Weapon Melinoe Aspect Unlock Location",
-	AxeRecoveryAspect          = "Axe Weapon Melinoe Aspect Unlock Location",
-	LobAmmoBoostAspect         = "Skull Weapon Melinoe Aspect Unlock Location",
-	BaseSuitAspect             = "Coat Weapon Melinoe Aspect Unlock Location",
+	BaseStaffAspect            = "Staff Melinoe",
+	DaggerBackstabAspect       = "Daggers Melinoe",
+	TorchSpecialDurationAspect = "Torches Melinoe",
+	AxeRecoveryAspect          = "Axe Melinoe",
+	LobAmmoBoostAspect         = "Skull Melinoe",
+	BaseSuitAspect             = "Coat Melinoe",
 }
 
 -- AP item name → game internal base aspect trait (keys match items.csv).
 BASE_ASPECT_ITEM_TO_NAME = {
-	["Staff Melinoe Aspect Unlock"]   = "BaseStaffAspect",
-	["Daggers Melinoe Aspect Unlock"] = "DaggerBackstabAspect",
-	["Torches Melinoe Aspect Unlock"] = "TorchSpecialDurationAspect",
-	["Axe Melinoe Aspect Unlock"]     = "AxeRecoveryAspect",
-	["Skull Melinoe Aspect Unlock"]   = "LobAmmoBoostAspect",
-	["Coat Melinoe Aspect Unlock"]    = "BaseSuitAspect",
+	["Staff Melinoe"]   = "BaseStaffAspect",
+	["Daggers Melinoe"] = "DaggerBackstabAspect",
+	["Torches Melinoe"] = "TorchSpecialDurationAspect",
+	["Axe Melinoe"]     = "AxeRecoveryAspect",
+	["Skull Melinoe"]   = "LobAmmoBoostAspect",
+	["Coat Melinoe"]    = "BaseSuitAspect",
 }
 
 -- Base aspect trait → { weapon, Bones cost } for the injected purchasable shop entry.
