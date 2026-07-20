@@ -177,6 +177,7 @@ function H2AP_InitBaseAspectShop()
 		if trait ~= start_trait then
 			if WeaponShopItemData[trait] == nil then
 				WeaponShopItemData[trait] = {
+					Name = trait,
 					WeaponName = data.weapon,
 					HideAfterPurchased = true,
 					IconScale = 0.8,
