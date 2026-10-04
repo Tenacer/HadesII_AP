@@ -306,28 +306,10 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave Entropy (MixerMythic)")
 		return true
 	end
-	-- Keepsakes: track the AP unlock in AP_KeepsakeReceived so GiftPresentation stays clear and the gifting check remains reachable.
-	local gift_id = KEEPSAKE_GIFT_IDS[item_name]
-	if gift_id then
-		GameState.AP_KeepsakeReceived = GameState.AP_KeepsakeReceived or {}
-		GameState.AP_KeepsakeReceived[gift_id] = true
-		print("[HadesII_AP] Gave keepsake: " .. item_name)
-		return true
-	end
-	-- Familiars: set FamiliarsUnlocked (the whole unlock) and record AP_FamiliarReceived so a later recruit doesn't undo it.
-	local familiar = FAMILIAR_ITEM_TO_NAME and FAMILIAR_ITEM_TO_NAME[item_name]
-	if familiar then
-		GameState.AP_FamiliarReceived = GameState.AP_FamiliarReceived or {}
-		GameState.AP_FamiliarReceived[familiar] = true
-		GameState.FamiliarsUnlocked = GameState.FamiliarsUnlocked or {}
-		GameState.FamiliarsUnlocked[familiar] = true
-		if CurrentRun then
-			CurrentRun.FamiliarsUnlocked = CurrentRun.FamiliarsUnlocked or {}
-			CurrentRun.FamiliarsUnlocked[familiar] = true
-		end
-		print("[HadesII_AP] Gave familiar: " .. item_name .. " (" .. familiar .. ")")
-		return true
-	end
+	handled = H2AP_KeepsakeGiveItem(item_name)
+	if handled ~= nil then return handled end
+	handled = H2AP_FamiliarGiveItem(item_name)
+	if handled ~= nil then return handled end
 	-- Tools: set WeaponsUnlocked only; WorldUpgradesAdded belongs to the shop interception so the slot check stays reachable.
 	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
 	if tool then

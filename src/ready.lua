@@ -10,11 +10,12 @@ import 'lib/utils.lua'
 import 'lib/ipc.lua'
 import 'lib/cauldron.lua'
 import 'lib/prophecies.lua'
+import 'lib/keepsakes.lua'
 import 'lib/ItemData.lua'
 import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/tools.lua'
-import 'lib/familiar.lua'
+import 'lib/familiars.lua'
 import 'lib/traphelper.lua'
 import 'lib/qol.lua'
 import 'lib/bossreward.lua'
@@ -91,60 +92,17 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", H2AP_OnCauldronPurchase)
 -- ── Keepsakesanity location check ────────────────────────────────────────────
 
 -- Keepsakesanity: undo the vanilla keepsake grant, send the check, and flag AP_KeepsakeChecked so GiftLogic doesn't re-fire this presentation.
-modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", function(base, npc, giftName)
-	local settings = H2AP_LoadSettings()
-	if settings and settings.keepsakesanity == 1 then
-		local location = KEEPSAKE_LOCATION_FOR_GIFT[giftName]
-		if location then
-			GameState.GiftPresentation[giftName] = nil
-			GameState.NewKeepsakeItem[giftName]  = nil
-			GameState.AP_KeepsakeChecked = GameState.AP_KeepsakeChecked or {}
-			GameState.AP_KeepsakeChecked[giftName] = true
-			H2AP_ShowKeepsakeCheckBanner(npc)
-			H2AP_CheckLocation(location)
-			return
-		end
-	end
-	return base(npc, giftName)
-end)
+modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", H2AP_OnKeepsakeGifted)
 
 -- ── Familiarsanity location check ─────────────────────────────────────────────
 
 -- Familiarsanity: recruiting sends the check, then the vanilla FamiliarsUnlocked grant is undone unless the AP item already delivered it.
-modutil.mod.Path.Wrap("FamiliarRecruitPresentation", function(base, usee, args)
-	local settings = H2AP_LoadSettings()
-	local name = usee and usee.Name
-	if not (settings and settings.familiarsanity == 1 and name and FAMILIAR_LOCATIONS[name]) then
-		return base(usee, args)
-	end
-	GameState.AP_FamiliarChecked = GameState.AP_FamiliarChecked or {}
-	GameState.AP_FamiliarChecked[name] = true
-	H2AP_CheckLocation(FAMILIAR_LOCATIONS[name])
-	base(usee, args)
-	local received = GameState.AP_FamiliarReceived and GameState.AP_FamiliarReceived[name]
-	if not received then
-		GameState.FamiliarsUnlocked[name] = nil
-		if CurrentRun and CurrentRun.FamiliarsUnlocked then
-			CurrentRun.FamiliarsUnlocked[name] = nil
-		end
-	end
-	H2AP_ShowCheckSentBanner()
-end)
+modutil.mod.Path.Wrap("FamiliarRecruitPresentation", H2AP_OnFamiliarRecruited)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
 
 -- The rack screen computes Unlocked from the (emptied) GiftData requirements, so recompute it from GiftPresentation / AP receipt.
-modutil.mod.Path.Wrap("CreateKeepsakeIcon", function(base, screen, components, args)
-	local settings = H2AP_LoadSettings()
-	if settings and args and args.UpgradeData and args.UpgradeData.Gift then
-		local gift_id = args.UpgradeData.Gift
-		local from_gift = (GameState.GiftPresentation[gift_id] == true)
-		local from_ap   = (GameState.AP_KeepsakeReceived
-			and GameState.AP_KeepsakeReceived[gift_id] == true)
-		args.UpgradeData.Unlocked = from_gift or from_ap
-	end
-	return base(screen, components, args)
-end)
+modutil.mod.Path.Wrap("CreateKeepsakeIcon", H2AP_OnCreateKeepsakeIcon)
 
 -- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
 

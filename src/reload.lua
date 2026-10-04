@@ -3,38 +3,6 @@
 
 -- Hot-reloadable AP-icon / text-label helpers and SJSON hook handlers; library modules import from ready.lua / ready_late.lua instead.
 
--- Show the AP logo banner when a keepsake gifting location check fires.
-function H2AP_ShowKeepsakeCheckBanner(npc)
-	thread(function()
-		AdjustColorGrading({ Name = "Mythmaker", Duration = 0.66 })
-		PlaySound({ Name = "/Leftovers/Menu Sounds/StarSelectConfirm" })
-		thread(PlayVoiceLines, npc.GiftGivenVoiceLines, true)
-		thread(PlayVoiceLines, CurrentRun.Hero.GiftReceivedVoiceLines, true)
-		DisplayInfoBanner(nil, {
-			Icon = AP_ICON_ANIM,
-			IconScale = 1.3,
-			IconMoveSpeed = 0.00001,
-			IconOffsetY = 6,
-			HighlightIcon = true,
-			TitleText = "APCheckSent",
-			FontScale = 0.82,
-			AnimationName = "InfoBannerGiftIn",
-			AnimationOutName = "InfoBannerGiftOut",
-			IconBackingAnimationName = "LocationBackingIrisSmallSubtitleIn",
-			IconBackingAnimationOutName = "LocationBackingIrisSmallSubtitleOut",
-			IconBackingColor = Color.Lavender,
-			IconBackingHSV = { 0.25, -0.2, 0.1 },
-		})
-		thread(function()
-			wait(1.0)
-			AdjustColorGrading({ Name = "Off", Duration = 1.0 })
-		end)
-		if CheckObjectiveSet("KeepsakePrompt") then
-			UpdateAffordabilityStatus()
-		end
-	end)
-end
-
 -- ── SJSON hook handlers ───────────────────────────────────────────────────────
 
 -- initial_weapon slot value → internal weapon name; kept local because the SJSON hooks can fire before lib/weapons.lua loads.

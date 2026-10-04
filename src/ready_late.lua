@@ -18,24 +18,9 @@ H2AP_PatchSurfaceIncantationReveal()
 H2AP_PatchIncantationCosts()
 H2AP_PatchGoalIncantationGate()
 H2AP_PatchFamiliarGates()
+H2AP_PatchKeepsakeGiftRequirements()
 -- Flush the outbox immediately so the Python client sees the game is running.
 H2AP_FlushOutbox()
-
--- ── GiftData fix ──────────────────────────────────────────────────────────────
-
--- Replace AP-mapped keepsake gift-level prerequisites with an AP_KeepsakeChecked guard so gifting works without story dialogue; unmapped (post-ending) gifts keep vanilla requirements.
-for npcName, npcData in pairs(GiftData) do
-	if type(npcData) == "table" then
-		for i = 1, #npcData do
-			local entry = npcData[i]
-			if entry and entry.Gift and KEEPSAKE_LOCATION_FOR_GIFT[entry.Gift] then
-				entry.GameStateRequirements = {
-					{ PathFalse = { "GameState", "AP_KeepsakeChecked", entry.Gift } },
-				}
-			end
-		end
-	end
-end
 
 -- ── Contested game-function wraps ─────────────────────────────────────────────
 -- Globals also hooked by other installed mods register here (after on_all_mods_loaded) for deterministic wrap-chain order.
