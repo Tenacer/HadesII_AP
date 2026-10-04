@@ -6,9 +6,12 @@
 -- this file will not be reloaded if it changes during gameplay.
 
 -- ── Library modules with import-time side effects ─────────────────────────────
--- rivals.lua and weapons.lua do install work at import time, so they load here exactly once.
+-- rivals.lua does install work at import time, so it loads here exactly once.
 import 'lib/rivals.lua'
-import 'lib/weapons.lua'
+
+-- Starting weapon for fresh saves and existing saves.
+H2AP_ApplyStartingWeapon()
+H2AP_InstallCreateNewHeroOverride()
 
 -- ── Initial startup calls ────────────────────────────────────────────────────
 
@@ -79,63 +82,12 @@ end)
 
 -- Weapon/aspect/tool sanity: suppress the vanilla shop unlock (player still pays), fire the check, and let H2AP_GiveItem deliver the real unlock.
 modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
-	local settings = H2AP_LoadSettings()
-	local itemData = button and button.Data
-	if settings and itemData then
-		local item_name = itemData.Name
-		local ap_location = nil
-		if settings.weaponsanity == 1 and WEAPON_LOCATIONS[item_name] then
-			ap_location = WEAPON_LOCATIONS[item_name]
-		elseif settings.hidden_aspectsanity == 1 and HIDDEN_ASPECT_LOCATIONS[item_name] then
-			ap_location = HIDDEN_ASPECT_LOCATIONS[item_name]
-		elseif settings.aspectsanity == 1 and STANDARD_ASPECT_LOCATIONS[item_name] then
-			ap_location = STANDARD_ASPECT_LOCATIONS[item_name]
-		elseif settings.aspectsanity == 1 and BASE_ASPECT_LOCATIONS[item_name] then
-			ap_location = BASE_ASPECT_LOCATIONS[item_name]
-		elseif settings.toolsanity == 1 and TOOL_LOCATIONS[item_name] then
-			-- Tools share the WeaponShop screen.
-			ap_location = TOOL_LOCATIONS[item_name]
-		end
-		if ap_location then
-			if not button.Free and not HasResources(itemData.Cost) then
-				ScreenCantAffordPresentation(screen, button)
-				return
-			end
-			if not IsEmpty(itemData.Cost) ~= nil and itemData.PurchaseRequirements ~= nil
-				and not IsGameStateEligible(itemData.PurchaseRequirements) then
-				CantPurchasePresentation(screen.Components["PurchaseButton" .. button.Index])
-				return
-			end
-			for resourceName, resourceCost in pairs(itemData.Cost) do
-				-- Base aspects cost MetaCurrency (Bones), which may lack a cost-icon backing.
-				local backing = screen.Components["ResourceIconBacking" .. resourceName]
-				SpendResource(resourceName, resourceCost, metaUpgradeName, {
-					TargetId = backing and backing.Id,
-					UseScreenLocation = true,
-					TextOffsetY = 11, TextAnchorOffsetY = -50,
-					HoldDuration = 0, FadeOutDuration = 0.2,
-					SkipQuestStatusCheck = true,
-				})
-			end
-			WeaponShopItemPurchasedPresentation(button, itemData)
-			GameState.WorldUpgradesAdded[item_name] = true
-			if CurrentRun then
-				CurrentRun.WorldUpgradesAdded[item_name] = true
-			end
-			RemoveStoreItemPin(item_name, { Purchase = true })
-			CreateAnimation({ Name = "ContractorSlotPurchase", DestinationId = screen.Components["PurchaseButton" .. button.Index].Id, OffsetX = 0 })
-			Destroy({ Id = screen.Components["PurchaseButton" .. button.Index].Id })
-			screen.Components["PurchaseButton" .. button.Index] = nil
-			if screen.Components["Icon" .. button.Index] ~= nil then
-				Destroy({ Id = screen.Components["Icon" .. button.Index].Id })
-				screen.Components["Icon" .. button.Index] = nil
-			end
-			-- Pass the CloseButton so the camera pans back to Melinoë instead of staying stuck on the shop.
-			CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
-			H2AP_CheckLocation(ap_location)
-			H2AP_ShowCheckSentBanner()
-			return
-		end
+	local item_name = button and button.Data and button.Data.Name
+	local ap_location = item_name and (H2AP_WeaponShopLocation(item_name)
+		or H2AP_AspectShopLocation(item_name)
+		or H2AP_ToolShopLocation(item_name))
+	if ap_location then
+		return H2AP_PurchaseShopCheck(screen, button, ap_location)
 	end
 	return base(screen, button)
 end)

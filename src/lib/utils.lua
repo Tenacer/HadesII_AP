@@ -73,6 +73,49 @@ function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
 	entry.Description = new_desc
 end
 
+-- Replicate a WeaponShop purchase without the vanilla unlock (the player still pays), then fire the AP check; the AP item delivers the real unlock.
+function H2AP_PurchaseShopCheck(screen, button, ap_location)
+	local itemData = button.Data
+	local item_name = itemData.Name
+	if not button.Free and not HasResources(itemData.Cost) then
+		ScreenCantAffordPresentation(screen, button)
+		return
+	end
+	if not IsEmpty(itemData.Cost) ~= nil and itemData.PurchaseRequirements ~= nil
+		and not IsGameStateEligible(itemData.PurchaseRequirements) then
+		CantPurchasePresentation(screen.Components["PurchaseButton" .. button.Index])
+		return
+	end
+	for resourceName, resourceCost in pairs(itemData.Cost) do
+		-- Base aspects cost MetaCurrency (Bones), which may lack a cost-icon backing.
+		local backing = screen.Components["ResourceIconBacking" .. resourceName]
+		SpendResource(resourceName, resourceCost, metaUpgradeName, {
+			TargetId = backing and backing.Id,
+			UseScreenLocation = true,
+			TextOffsetY = 11, TextAnchorOffsetY = -50,
+			HoldDuration = 0, FadeOutDuration = 0.2,
+			SkipQuestStatusCheck = true,
+		})
+	end
+	WeaponShopItemPurchasedPresentation(button, itemData)
+	GameState.WorldUpgradesAdded[item_name] = true
+	if CurrentRun then
+		CurrentRun.WorldUpgradesAdded[item_name] = true
+	end
+	RemoveStoreItemPin(item_name, { Purchase = true })
+	CreateAnimation({ Name = "ContractorSlotPurchase", DestinationId = screen.Components["PurchaseButton" .. button.Index].Id, OffsetX = 0 })
+	Destroy({ Id = screen.Components["PurchaseButton" .. button.Index].Id })
+	screen.Components["PurchaseButton" .. button.Index] = nil
+	if screen.Components["Icon" .. button.Index] ~= nil then
+		Destroy({ Id = screen.Components["Icon" .. button.Index].Id })
+		screen.Components["Icon" .. button.Index] = nil
+	end
+	-- Pass the CloseButton so the camera pans back to Melinoë instead of staying stuck on the shop.
+	CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
+	H2AP_CheckLocation(ap_location)
+	H2AP_ShowCheckSentBanner()
+end
+
 -- ═══ Presentation ════════════════════════════════════════════════════════════
 
 -- Show the AP logo banner when a location check fires.

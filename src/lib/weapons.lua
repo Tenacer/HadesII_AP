@@ -1,8 +1,9 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── Starting weapon enforcement ───────────────────────────────────────────────
--- Ensures the hero starts with the AP-configured weapon via HeroData.DefaultWeapon (fresh saves) plus a CreateNewHero replacement (existing saves).
+-- Weapons: starting weapon, weaponsanity shop checks, weapon clears and weapon item delivery.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
 
 -- Maps initial_weapon slot data value to internal weapon name (order matches Options.py).
 AP_STARTING_WEAPONS = {
@@ -54,190 +55,19 @@ WEAPON_ITEM_TO_NAME = {
 	["Black Coat"]    = "WeaponSuit",
 }
 
--- Game internal aspect name → AP location name.
-HIDDEN_ASPECT_LOCATIONS = {
-	StaffRaiseDeadAspect = "Anubis",
-	DaggerTripleAspect   = "Morrigan",
-	TorchAutofireAspect  = "Supay",
-	AxeRallyAspect       = "Nergal",
-	LobGunAspect         = "Hel",
-	SuitComboAspect      = "Shiva",
-}
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
 
--- AP item name → game internal aspect name (keys match items.csv exactly).
-HIDDEN_ASPECT_ITEM_TO_NAME = {
-	["Anubis"]   = "StaffRaiseDeadAspect",
-	["Morrigan"] = "DaggerTripleAspect",
-	["Supay"]    = "TorchAutofireAspect",
-	["Nergal"]   = "AxeRallyAspect",
-	["Hel"]      = "LobGunAspect",
-	["Shiva"]    = "SuitComboAspect",
-}
+-- ── Starting weapon ───────────────────────────────────────────────────────────
+-- Ensures the hero starts with the AP-configured weapon via HeroData.DefaultWeapon (fresh saves) plus a CreateNewHero replacement (existing saves).
 
--- ── Aspect sanity: base + standard aspects (aspectsanity) ─────────────────────
+-- Point HeroData.DefaultWeapon at the configured starting weapon; called once from ready_late.
+function H2AP_ApplyStartingWeapon()
+	local settings = H2AP_LoadSettings()
+	local target = settings and AP_STARTING_WEAPONS[settings.initial_weapon or 0]
 
--- Game internal standard aspect trait → AP location name.
-STANDARD_ASPECT_LOCATIONS = {
-	StaffClearCastAspect     = "Circe",
-	StaffSelfHitAspect       = "Momus",
-	DaggerBlockAspect        = "Artemis",
-	DaggerHomingThrowAspect  = "Pan",
-	TorchDetonateAspect      = "Moros",
-	TorchSprintRecallAspect  = "Eos",
-	AxeArmCastAspect         = "Charon",
-	AxePerfectCriticalAspect = "Thanatos",
-	LobCloseAttackAspect     = "Medea",
-	LobImpulseAspect         = "Persephone",
-	SuitMarkCritAspect       = "Nyx",
-	SuitHexAspect            = "Selene",
-}
-
--- AP item name → game internal standard aspect trait (keys match items.csv).
-STANDARD_ASPECT_ITEM_TO_NAME = {
-	["Circe"]      = "StaffClearCastAspect",
-	["Momus"]      = "StaffSelfHitAspect",
-	["Artemis"]    = "DaggerBlockAspect",
-	["Pan"]        = "DaggerHomingThrowAspect",
-	["Moros"]      = "TorchDetonateAspect",
-	["Eos"]        = "TorchSprintRecallAspect",
-	["Charon"]     = "AxeArmCastAspect",
-	["Thanatos"]   = "AxePerfectCriticalAspect",
-	["Medea"]      = "LobCloseAttackAspect",
-	["Persephone"] = "LobImpulseAspect",
-	["Nyx"]        = "SuitMarkCritAspect",
-	["Selene"]     = "SuitHexAspect",
-}
-
--- Game internal base aspect trait → AP location name.
-BASE_ASPECT_LOCATIONS = {
-	BaseStaffAspect            = "Staff Melinoe",
-	DaggerBackstabAspect       = "Daggers Melinoe",
-	TorchSpecialDurationAspect = "Torches Melinoe",
-	AxeRecoveryAspect          = "Axe Melinoe",
-	LobAmmoBoostAspect         = "Skull Melinoe",
-	BaseSuitAspect             = "Coat Melinoe",
-}
-
--- AP item name → game internal base aspect trait (keys match items.csv).
-BASE_ASPECT_ITEM_TO_NAME = {
-	["Staff Melinoe"]   = "BaseStaffAspect",
-	["Daggers Melinoe"] = "DaggerBackstabAspect",
-	["Torches Melinoe"] = "TorchSpecialDurationAspect",
-	["Axe Melinoe"]     = "AxeRecoveryAspect",
-	["Skull Melinoe"]   = "LobAmmoBoostAspect",
-	["Coat Melinoe"]    = "BaseSuitAspect",
-}
-
--- Base aspect trait → { weapon, Bones cost } for the injected purchasable shop entry.
-BASE_ASPECT_SHOP = {
-	BaseStaffAspect            = { weapon = "WeaponStaffSwing", cost = 100 },
-	DaggerBackstabAspect       = { weapon = "WeaponDagger",     cost = 150 },
-	TorchSpecialDurationAspect = { weapon = "WeaponTorch",      cost = 200 },
-	AxeRecoveryAspect          = { weapon = "WeaponAxe",        cost = 250 },
-	LobAmmoBoostAspect         = { weapon = "WeaponLob",        cost = 300 },
-	BaseSuitAspect             = { weapon = "WeaponSuit",       cost = 350 },
-}
-
--- initial_weapon slot → ordered [base, first standard, second standard] traits.
--- Index into the slot matches the initial_aspect option (0=base, 1/2=standards).
-ASPECT_BY_WEAPON = {
-	[0] = { "BaseStaffAspect",            "StaffClearCastAspect",  "StaffSelfHitAspect" },
-	[1] = { "DaggerBackstabAspect",       "DaggerBlockAspect",     "DaggerHomingThrowAspect" },
-	[2] = { "TorchSpecialDurationAspect", "TorchDetonateAspect",   "TorchSprintRecallAspect" },
-	[3] = { "AxeRecoveryAspect",          "AxeArmCastAspect",      "AxePerfectCriticalAspect" },
-	[4] = { "LobAmmoBoostAspect",         "LobCloseAttackAspect",  "LobImpulseAspect" },
-	[5] = { "BaseSuitAspect",             "SuitMarkCritAspect",    "SuitHexAspect" },
-}
-
--- The starting aspect trait (granted, not a check), or nil when aspect sanity is off.
-function H2AP_InitialAspectTrait()
-	local s = H2AP_LoadSettings()
-	if not (s and s.aspectsanity == 1) then return nil end
-	local slot = ASPECT_BY_WEAPON[s.initial_weapon or 0]
-	return slot and slot[(s.initial_aspect or 0) + 1]
-end
-
--- Returns the ScreenData.WeaponShop category that owns a weapon.
-local function weapon_shop_category(weaponName)
-	if not (ScreenData and ScreenData.WeaponShop and ScreenData.WeaponShop.ItemCategories) then return nil end
-	for _, category in ipairs(ScreenData.WeaponShop.ItemCategories) do
-		if category.WeaponName == weaponName then return category end
+	if target and HeroData then
+		HeroData.DefaultWeapon = target
 	end
-	return nil
-end
-
--- Inject the base aspects as purchasable shop entries (Bones = MetaCurrency) and stop the
--- free FreeUnlocks grant so each becomes an AP check. Idempotent; the starting aspect is skipped.
-function H2AP_InitBaseAspectShop()
-	if GameState == nil then return end
-	local s = H2AP_LoadSettings()
-	if not (s and s.aspectsanity == 1 and WeaponShopItemData) then return end
-	local start_trait = H2AP_InitialAspectTrait()
-	for trait, data in pairs(BASE_ASPECT_SHOP) do
-		if trait ~= start_trait then
-			if WeaponShopItemData[trait] == nil then
-				WeaponShopItemData[trait] = {
-					Name = trait,
-					WeaponName = data.weapon,
-					HideAfterPurchased = true,
-					IconScale = 0.8,
-					UnlockTextId = "WeaponShopAspectUnlock",
-					Cost = { MetaCurrency = data.cost },
-					GameStateRequirements = {
-						{ PathTrue = { "GameState", "WorldUpgrades", "WorldUpgradeWeaponUpgradeSystem" } },
-					},
-				}
-			end
-			local category = weapon_shop_category(data.weapon)
-			if category then
-				local present = false
-				for _, name in ipairs(category) do
-					if name == trait then present = true break end
-				end
-				if not present then table.insert(category, 1, trait) end
-			end
-		end
-	end
-	-- Suppress the free base-aspect auto-grant (WeaponUpgradeLogic.OpenWeaponUpgradeScreen).
-	if ScreenData and ScreenData.WeaponUpgradeScreen and ScreenData.WeaponUpgradeScreen.FreeUnlocks then
-		for _, data in pairs(BASE_ASPECT_SHOP) do
-			ScreenData.WeaponUpgradeScreen.FreeUnlocks[data.weapon] = nil
-		end
-	end
-end
-
--- Grant the chosen starting aspect for the initial weapon so it is playable, and mark it
--- already-obtained so its shop slot never appears as a check.
-function H2AP_GrantInitialAspect()
-	if GameState == nil then return end
-	local trait = H2AP_InitialAspectTrait()
-	if not trait then return end
-	GameState.WeaponsUnlocked[trait]        = true
-	GameState.WorldUpgradesAdded[trait]     = true
-	GameState.WorldUpgradesViewed[trait]    = true
-	GameState.WorldUpgradesRevealed[trait]  = true
-	if CurrentRun then
-		CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
-		CurrentRun.WeaponsUnlocked[trait] = true
-	end
-end
-
--- QoL: grant the weapon aspect purchase system from the start (aspect_system_unlocked).
-function H2AP_ApplyAspectSystemUnlock()
-	if GameState == nil then return end
-	local s = H2AP_LoadSettings()
-	if not (s and s.aspect_system_unlocked == 1) then return end
-	GameState.WorldUpgrades.WorldUpgradeWeaponUpgradeSystem         = true
-	GameState.WorldUpgradesAdded.WorldUpgradeWeaponUpgradeSystem    = true
-	GameState.WorldUpgradesViewed.WorldUpgradeWeaponUpgradeSystem   = true
-	GameState.WorldUpgradesRevealed.WorldUpgradeWeaponUpgradeSystem = true
-end
-
-local settings = H2AP_LoadSettings()
-local target = settings and AP_STARTING_WEAPONS[settings.initial_weapon or 0]
-
-if target and HeroData then
-	HeroData.DefaultWeapon = target
 end
 
 -- Fixes GameState weapon unlock flags and WeaponShopItemData so the Training
@@ -271,29 +101,104 @@ function H2AP_InitWeaponState()
 	GameState.WorldUpgradesRevealed[t] = true
 end
 
--- Capture the original exactly once so hot-reloads don't keep wrapping.
-if not _ap_orig_CreateNewHero then
-	_ap_orig_CreateNewHero = CreateNewHero
+-- Replace CreateNewHero so existing saves swap the staff for the starting weapon; called once from ready_late.
+function H2AP_InstallCreateNewHeroOverride()
+	-- Capture the original exactly once so hot-reloads don't keep wrapping.
+	if not _ap_orig_CreateNewHero then
+		_ap_orig_CreateNewHero = CreateNewHero
+	end
+
+	function CreateNewHero(prevRun, args)
+		local hero = _ap_orig_CreateNewHero(prevRun, args)
+		local s = H2AP_LoadSettings()
+		local t = s and AP_STARTING_WEAPONS[s.initial_weapon or 0]
+		if not t or t == "WeaponStaffSwing" then return hero end
+		if hero.Weapons[t] and not hero.Weapons["WeaponStaffSwing"] then return hero end
+		hero.Weapons["WeaponStaffSwing"] = nil
+		hero.Weapons["WeaponStaffBall"] = nil
+		GameState.WeaponsUnlocked["WeaponStaffSwing"] = nil
+		GameState.WeaponsTouched["WeaponStaffSwing"] = nil
+		GameState.WorldUpgradesAdded["WeaponStaffSwing"] = nil
+		hero.Weapons[t] = true
+		local wdata = WeaponData[t]
+		if wdata and wdata.SecondaryWeapon then
+			hero.Weapons[wdata.SecondaryWeapon] = true
+		end
+		GameState.WeaponsUnlocked[t] = true
+		GameState.WeaponsTouched[t] = true
+		GameState.WorldUpgradesAdded[t] = true
+		return hero
+	end
 end
 
-function CreateNewHero(prevRun, args)
-	local hero = _ap_orig_CreateNewHero(prevRun, args)
-	local s = H2AP_LoadSettings()
-	local t = s and AP_STARTING_WEAPONS[s.initial_weapon or 0]
-	if not t or t == "WeaponStaffSwing" then return hero end
-	if hero.Weapons[t] and not hero.Weapons["WeaponStaffSwing"] then return hero end
-	hero.Weapons["WeaponStaffSwing"] = nil
-	hero.Weapons["WeaponStaffBall"] = nil
-	GameState.WeaponsUnlocked["WeaponStaffSwing"] = nil
-	GameState.WeaponsTouched["WeaponStaffSwing"] = nil
-	GameState.WorldUpgradesAdded["WeaponStaffSwing"] = nil
-	hero.Weapons[t] = true
-	local wdata = WeaponData[t]
-	if wdata and wdata.SecondaryWeapon then
-		hero.Weapons[wdata.SecondaryWeapon] = true
+-- ── Shop checks and weapon clears ────────────────────────────────────────────
+
+-- AP location for a weapon shop slot, or nil when weaponsanity is off or the slot isn't a weapon.
+function H2AP_WeaponShopLocation(item_name)
+	local settings = H2AP_LoadSettings()
+	if settings.weaponsanity == 1 then return WEAPON_LOCATIONS[item_name] end
+	return nil
+end
+
+-- Record a distinct weapon clear on a final-boss kill and fire its "<Weapon> Clear" check under weaponsanity.
+function H2AP_RecordWeaponClear()
+	if type(GetEquippedWeapon) ~= "function" then return end
+	local state = H2AP_LoadState()
+	local weapon = GetEquippedWeapon()
+	if weapon and not state.weapon_clears[weapon] then
+		state.weapon_clears[weapon] = true
+		local settings = H2AP_LoadSettings() or {}
+		local loc = WEAPON_CLEAR_LOCATIONS[weapon]
+		if loc and (settings.weaponsanity == true or settings.weaponsanity == 1) then
+			H2AP_CheckLocation(loc)
+		end
+		H2AP_SaveState()
 	end
-	GameState.WeaponsUnlocked[t] = true
-	GameState.WeaponsTouched[t] = true
-	GameState.WorldUpgradesAdded[t] = true
-	return hero
+end
+
+-- Number of distinct weapons that have cleared a final boss (weapons goal).
+function H2AP_DistinctWeaponClears()
+	local n = 0
+	for _ in pairs(H2AP_LoadState().weapon_clears) do n = n + 1 end
+	return n
+end
+
+-- Weapons: set WeaponsUnlocked only (same shop-slot reasoning as tools), then refresh the live kit if the player is at it. Returns nil for other items.
+function H2AP_WeaponGiveItem(item_name)
+	local weapon = WEAPON_ITEM_TO_NAME[item_name]
+	if not weapon then return nil end
+	GameState.WeaponsUnlocked[weapon]        = true
+	GameState.WeaponsTouched[weapon]         = true
+	if CurrentRun then
+		CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+		CurrentRun.WeaponsUnlocked[weapon] = true
+	end
+	pcall(function()
+		local kit = GetWeaponKit and GetWeaponKit(weapon)
+		if kit then
+			kit.OnUsedFunctionName = "UseWeaponKit"
+			if SetWeaponKitUseText then SetWeaponKitUseText(kit) end
+			UseableOn({ Id = kit.ObjectId })
+			SetAlpha({ Id = kit.ObjectId, Fraction = 1.0 })
+		end
+	end)
+	print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
+	return true
+end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+-- Replace weapon shop labels in TraitText under weaponsanity; the starting weapon slot is not a check, so it keeps its vanilla name.
+function H2AP_WeaponRelabelTraitText(data)
+	local settings = H2AP_LoadSettings() or {}
+	if settings.weaponsanity ~= 1 then return end
+	local start_weapon = AP_STARTING_WEAPONS[settings.initial_weapon or 0]
+	local location_items = H2AP_ReadLocationItems() or {}
+	for _, entry in ipairs(data.Texts) do
+		local id = entry.Id
+		local ap_location = id and id ~= start_weapon and WEAPON_LOCATIONS[id]
+		if ap_location then
+			H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
+		end
+	end
 end

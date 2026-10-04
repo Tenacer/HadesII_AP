@@ -17,3 +17,16 @@ function H2AP_ApplyUnlockBroker()
 	GameState.WorldUpgradesRevealed[BROKER_WORLD_UPGRADE] = true
 	print("[HadesII_AP] Broker unlocked at start (WorldUpgradeMarket)")
 end
+
+-- ── Aspect system QoL unlock ──────────────────────────────────────────────────
+
+-- QoL: grant the weapon aspect purchase system from the start (aspect_system_unlocked).
+function H2AP_ApplyAspectSystemUnlock()
+	if GameState == nil then return end
+	local s = H2AP_LoadSettings()
+	if not (s and s.aspect_system_unlocked == 1) then return end
+	GameState.WorldUpgrades.WorldUpgradeWeaponUpgradeSystem         = true
+	GameState.WorldUpgradesAdded.WorldUpgradeWeaponUpgradeSystem    = true
+	GameState.WorldUpgradesViewed.WorldUpgradeWeaponUpgradeSystem   = true
+	GameState.WorldUpgradesRevealed.WorldUpgradeWeaponUpgradeSystem = true
+end

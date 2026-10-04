@@ -15,6 +15,8 @@ import 'lib/ItemData.lua'
 import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/tools.lua'
+import 'lib/weapons.lua'
+import 'lib/aspects.lua'
 import 'lib/familiars.lua'
 import 'lib/traphelper.lua'
 import 'lib/qol.lua'
@@ -44,7 +46,9 @@ end)
 -- Weapon / tool / hidden-aspect shop labels live in TraitText, not HelpText.
 local traitfile = rom.path.combine(rom.paths.Content, 'Game/Text/en/TraitText.en.sjson')
 sjson.hook(traitfile, function(data)
-	return sjson_TraitText(data)
+	H2AP_WeaponRelabelTraitText(data)
+	H2AP_ToolRelabelTraitText(data)
+	H2AP_AspectRelabelTraitText(data)
 end)
 
 -- Register the AP-logo reward-drop animation so SpawnRoomReward visuals can use it.
@@ -117,18 +121,7 @@ modutil.mod.Path.Wrap("CashOutQuest", H2AP_OnCashOutQuest)
 -- ── Hidden aspect unlock tracking ────────────────────────────────────────────
 
 -- Aspect sanity: re-point HasAnyAspectUnlocked at WeaponsUnlocked so the kit prompt tracks the AP item, not the shop check.
-modutil.mod.Path.Wrap("HasAnyAspectUnlocked", function(base, weaponName)
-	local settings = H2AP_LoadSettings()
-	if not (settings and (settings.hidden_aspectsanity == 1 or settings.aspectsanity == 1)) then
-		return base(weaponName)
-	end
-	for traitName, traitData in pairs(TraitSetData.Aspects) do
-		if traitData.RequiredWeapon == weaponName and GameState.WeaponsUnlocked[traitName] then
-			return true
-		end
-	end
-	return false
-end)
+modutil.mod.Path.Wrap("HasAnyAspectUnlocked", H2AP_OnHasAnyAspectUnlocked)
 
 -- ── Death hook ────────────────────────────────────────────────────────────────
 -- The KillHero wrap lives in ready_late.lua (4 other installed mods also hook it).

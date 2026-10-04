@@ -212,13 +212,6 @@ function H2AP_LoadState()
 	return _state
 end
 
--- Number of distinct weapons that have cleared a final boss (weapons goal).
-function H2AP_DistinctWeaponClears()
-	local n = 0
-	for _ in pairs(H2AP_LoadState().weapon_clears) do n = n + 1 end
-	return n
-end
-
 function H2AP_SaveState()
 	local s = H2AP_LoadState()
 	local f = io.open(state_path(), "w")
@@ -310,64 +303,12 @@ function H2AP_GiveItem(item_name)
 	if handled ~= nil then return handled end
 	handled = H2AP_FamiliarGiveItem(item_name)
 	if handled ~= nil then return handled end
-	-- Tools: set WeaponsUnlocked only; WorldUpgradesAdded belongs to the shop interception so the slot check stays reachable.
-	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
-	if tool then
-		GameState.WeaponsUnlocked[tool]         = true
-		if CurrentRun then
-			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
-			CurrentRun.WeaponsUnlocked[tool] = true
-		end
-		print("[HadesII_AP] Gave tool: " .. item_name .. " (" .. tool .. ")")
-		return true
-	end
-	-- Weapons: set WeaponsUnlocked only (same shop-slot reasoning as tools), then refresh the live kit if the player is at it.
-	local weapon = WEAPON_ITEM_TO_NAME and WEAPON_ITEM_TO_NAME[item_name]
-	if weapon then
-		GameState.WeaponsUnlocked[weapon]        = true
-		GameState.WeaponsTouched[weapon]         = true
-		if CurrentRun then
-			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
-			CurrentRun.WeaponsUnlocked[weapon] = true
-		end
-		pcall(function()
-			local kit = GetWeaponKit and GetWeaponKit(weapon)
-			if kit then
-				kit.OnUsedFunctionName = "UseWeaponKit"
-				if SetWeaponKitUseText then SetWeaponKitUseText(kit) end
-				UseableOn({ Id = kit.ObjectId })
-				SetAlpha({ Id = kit.ObjectId, Fraction = 1.0 })
-			end
-		end)
-		print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
-		return true
-	end
-	-- Hidden aspects: set WeaponsUnlocked only (same shop-slot reasoning as tools).
-	local aspect = HIDDEN_ASPECT_ITEM_TO_NAME and HIDDEN_ASPECT_ITEM_TO_NAME[item_name]
-	if aspect then
-		GameState.WeaponsUnlocked[aspect]        = true
-		if CurrentRun then
-			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
-			CurrentRun.WeaponsUnlocked[aspect] = true
-		end
-		-- Refresh the kit's aspect prompt if the player is at the kit when it arrives.
-		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
-		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
-		return true
-	end
-	-- Base + standard aspects: same WeaponsUnlocked delivery as hidden aspects.
-	local base_std = (STANDARD_ASPECT_ITEM_TO_NAME and STANDARD_ASPECT_ITEM_TO_NAME[item_name])
-		or (BASE_ASPECT_ITEM_TO_NAME and BASE_ASPECT_ITEM_TO_NAME[item_name])
-	if base_std then
-		GameState.WeaponsUnlocked[base_std] = true
-		if CurrentRun then
-			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
-			CurrentRun.WeaponsUnlocked[base_std] = true
-		end
-		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
-		print("[HadesII_AP] Gave aspect: " .. item_name .. " (" .. base_std .. ")")
-		return true
-	end
+	handled = H2AP_ToolGiveItem(item_name)
+	if handled ~= nil then return handled end
+	handled = H2AP_WeaponGiveItem(item_name)
+	if handled ~= nil then return handled end
+	handled = H2AP_AspectGiveItem(item_name)
+	if handled ~= nil then return handled end
 	handled = H2AP_ProphecyGiveItem(item_name)
 	if handled ~= nil then return handled end
 	-- Unknown item — log and advance items_index so it isn't re-processed.

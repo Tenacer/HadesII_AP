@@ -294,18 +294,7 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 
 		H2AP_RecordStormStopKill(boss_key)
 
-		-- Record a distinct weapon clear and fire its "<Weapon> Clear" check under weaponsanity.
-		if type(GetEquippedWeapon) == "function" then
-			local weapon = GetEquippedWeapon()
-			if weapon and not state.weapon_clears[weapon] then
-				state.weapon_clears[weapon] = true
-				local settings = H2AP_LoadSettings() or {}
-				local loc = WEAPON_CLEAR_LOCATIONS[weapon]
-				if loc and (settings.weaponsanity == true or settings.weaponsanity == 1) then
-					H2AP_CheckLocation(loc)
-				end
-			end
-		end
+		H2AP_RecordWeaponClear()
 
 		H2AP_SaveState()
 
