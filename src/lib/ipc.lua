@@ -253,30 +253,12 @@ end
 -- ── Item granting ─────────────────────────────────────────────────────────────
 
 function H2AP_GiveItem(item_name)
-	-- Vow items: reverse_Fear only — unlock a rank of the corresponding shrine vow.
-	if H2AP_GetShrineForVowItem(item_name) then
-		return H2AP_GiveItemVow(item_name)
-	end
+	local handled = H2AP_FearGiveItem(item_name)
+	if handled ~= nil then return handled end
 
-	-- Traps: queue mid-run effects (drained from the SetupMap wrap).
-	if TRAP_ITEMS and TRAP_ITEMS[item_name] then
-		return H2AP_GiveItemTrap(item_name)
-	end
-
-	-- Helpers: persistent stat boosts (MaxHealth, InitialMoney, BoonBoost).
-	if HELPER_ITEMS and HELPER_ITEMS[item_name] then
-		return H2AP_GiveItemHelper(item_name)
-	end
-
-	local filler = FILLER_ITEMS[item_name]
-	if filler then
-		local settings = H2AP_LoadSettings()
-		local amount = (settings and settings[filler.setting]) or 1
-		AddResource(filler.resource, amount, _PLUGIN.guid)
-		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
-		return true
-	end
-	local handled = H2AP_CauldronGiveItem(item_name)
+	handled = H2AP_TrapsGiveItem(item_name)
+	if handled ~= nil then return handled end
+	handled = H2AP_CauldronGiveItem(item_name)
 	if handled ~= nil then return handled end
 	-- True Ending ingredients: grant the resource and let H2AP_SyncStoryFlags handle flags.
 	if item_name == "Zodiac Sand" then
@@ -425,11 +407,9 @@ function H2AP_NotifyReceived(item)
 	end
 	item_name = tostring(item_name or "")
 
-	local settings = H2AP_LoadSettings() or {}
-	local filler = FILLER_ITEMS and FILLER_ITEMS[item_name]
+	local amount = H2AP_FillerAmount(item_name)
 	local text
-	if filler then
-		local amount = settings[filler.setting] or 1
+	if amount then
 		text = "Received: " .. amount .. "x " .. item_name
 	else
 		text = "Received: " .. item_name

@@ -18,7 +18,7 @@ import 'lib/tools.lua'
 import 'lib/weapons.lua'
 import 'lib/aspects.lua'
 import 'lib/familiars.lua'
-import 'lib/traphelper.lua'
+import 'lib/traps.lua'
 import 'lib/qol.lua'
 import 'lib/bossreward.lua'
 import 'lib/score.lua'
@@ -129,14 +129,7 @@ modutil.mod.Path.Wrap("HasAnyAspectUnlocked", H2AP_OnHasAnyAspectUnlocked)
 -- ── Shrine access block ───────────────────────────────────────────────────────
 
 -- Block the shrine screen when the mod manages vow levels (reverse/minimal fear).
-modutil.mod.Path.Wrap("UseShrineObject", function(base, usee, args)
-	local settings = H2AP_LoadSettings()
-	if settings and settings.fear_system ~= nil and settings.fear_system ~= 3 then
-		print("[HadesII_AP] Shrine interaction blocked (fear system active)")
-		return
-	end
-	return base(usee, args)
-end)
+modutil.mod.Path.Wrap("UseShrineObject", H2AP_OnUseShrine)
 
 -- ── Unlock all grasp ──────────────────────────────────────────────────────────
 

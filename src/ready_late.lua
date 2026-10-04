@@ -5,10 +5,9 @@
 -- here is where your mod sets up all the things it will do after all other mods load.
 -- this file will not be reloaded if it changes during gameplay.
 
--- ── Library modules with import-time side effects ─────────────────────────────
--- rivals.lua does install work at import time, so it loads here exactly once.
-import 'lib/rivals.lua'
+-- ── One-time installs ─────────────────────────────────────────────────────────
 
+H2AP_InstallReverseRivals()
 -- Starting weapon for fresh saves and existing saves.
 H2AP_ApplyStartingWeapon()
 H2AP_InstallCreateNewHeroOverride()
@@ -93,25 +92,8 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 end)
 
 -- StartNewRun: apply the Money and Max Health helpers after vanilla finishes.
-modutil.mod.Path.Wrap("StartNewRun", function(base, prevRun, args)
-	local result = base(prevRun, args)
-	pcall(H2AP_ApplyMaxHealthHelper)
-	pcall(H2AP_ApplyInitialMoneyHelper)
-	return result
-end)
+modutil.mod.Path.Wrap("StartNewRun", H2AP_OnStartNewRun)
 
 -- GetRarityChances: add the accumulated Boon Boost percentage to the Rare and Epic buckets only.
-local AP_BOON_BOOST_RARITIES = { "Rare", "Epic" }
-modutil.mod.Path.Wrap("GetRarityChances", function(base, loot)
-	local rarityChances = base(loot)
-	local boost = H2AP_BoonBoostPct and H2AP_BoonBoostPct() or 0
-	if boost > 0 and rarityChances then
-		for _, rarityName in ipairs(AP_BOON_BOOST_RARITIES) do
-			if rarityChances[rarityName] ~= nil then
-				rarityChances[rarityName] = rarityChances[rarityName] + boost
-			end
-		end
-	end
-	return rarityChances
-end)
+modutil.mod.Path.Wrap("GetRarityChances", H2AP_OnGetRarityChances)
 

@@ -1,6 +1,24 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
+-- Filler, traps and helpers: the non-progression items and their effects.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
+
+-- Key = AP item name (as written in items.csv).
+-- resource = internal AddResource name.
+-- setting  = slot-data key for how much to grant per pack.
+FILLER_ITEMS = {
+	["Ash"]        = { resource = "MetaCardPointsCommon", setting = "ash_pack_value" },
+	["Psyche"]     = { resource = "MemPointsCommon",      setting = "psyche_pack_value" },
+	["Bones"]      = { resource = "MetaCurrency",         setting = "bones_pack_value" },
+	["Nightmare"]  = { resource = "WeaponPointsRare",     setting = "nightmare_pack_value" },
+	["Nectar"]     = { resource = "GiftPoints",           setting = "nectar_pack_value" },
+	["Ambrosia"]   = { resource = "GiftPointsRare",       setting = "ambrosia_pack_value" },
+	["Fate Fabric"]= { resource = "MetaFabric",           setting = "fate_fabric_pack_value" },
+	["Moon Dust"]  = { resource = "CardUpgradePoints",    setting = "moon_dust_pack_value" },
+}
+
 -- Tunable per-item amounts, mirroring Polycosmos.
 local TRAP_MONEY_AMOUNT        = 100
 local TRAP_HEALTH_FRACTION     = 0.25     -- of MaxHealth
@@ -19,6 +37,11 @@ HELPER_ITEMS = {
 	["Initial Money Helper"] = true,
 }
 
+-- Rarity buckets the Boon Boost helper adds to.
+local AP_BOON_BOOST_RARITIES = { "Rare", "Epic" }
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
 local function init_lodger()
 	if GameState == nil then return false end
 	GameState.AP_HelperLodger = GameState.AP_HelperLodger or {
@@ -33,9 +56,19 @@ local function init_lodger()
 	return true
 end
 
+-- ── Filler ────────────────────────────────────────────────────────────────────
+
+-- Amount granted per filler pack, or nil when the item isn't filler.
+function H2AP_FillerAmount(item_name)
+	local filler = FILLER_ITEMS[item_name]
+	if not filler then return nil end
+	local settings = H2AP_LoadSettings()
+	return (settings and settings[filler.setting]) or 1
+end
+
 -- ── Trap dispatch ────────────────────────────────────────────────────────────
 
-function H2AP_GiveItemTrap(item_name)
+local function give_trap(item_name)
 	if not init_lodger() then return false end
 	if item_name == "Money Punishment" then
 		GameState.AP_TrapQueue.MoneyPending = GameState.AP_TrapQueue.MoneyPending + 1
@@ -64,7 +97,7 @@ local function apply_max_health_trait(amount)
 	return ok
 end
 
-function H2AP_GiveItemHelper(item_name)
+local function give_helper(item_name)
 	if not init_lodger() then return false end
 	local L = GameState.AP_HelperLodger
 	if item_name == "Max Health Helper" then
@@ -111,6 +144,45 @@ end
 function H2AP_BoonBoostPct()
 	if not init_lodger() then return 0 end
 	return (GameState.AP_HelperLodger.BoonBoost or 0) * HELPER_BOON_BOOST_PER
+end
+
+-- Traps queue mid-run effects, helpers add persistent boosts and filler grants meta resources; returns nil for other items.
+function H2AP_TrapsGiveItem(item_name)
+	if TRAP_ITEMS[item_name] then
+		return give_trap(item_name)
+	end
+	if HELPER_ITEMS[item_name] then
+		return give_helper(item_name)
+	end
+	local amount = H2AP_FillerAmount(item_name)
+	if amount then
+		AddResource(FILLER_ITEMS[item_name].resource, amount, _PLUGIN.guid)
+		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
+		return true
+	end
+	return nil
+end
+
+-- StartNewRun wrap: apply the Money and Max Health helpers after vanilla finishes.
+function H2AP_OnStartNewRun(base, prevRun, args)
+	local result = base(prevRun, args)
+	pcall(H2AP_ApplyMaxHealthHelper)
+	pcall(H2AP_ApplyInitialMoneyHelper)
+	return result
+end
+
+-- GetRarityChances wrap: add the accumulated Boon Boost percentage to the Rare and Epic buckets only.
+function H2AP_OnGetRarityChances(base, loot)
+	local rarityChances = base(loot)
+	local boost = H2AP_BoonBoostPct()
+	if boost > 0 and rarityChances then
+		for _, rarityName in ipairs(AP_BOON_BOOST_RARITIES) do
+			if rarityChances[rarityName] ~= nil then
+				rarityChances[rarityName] = rarityChances[rarityName] + boost
+			end
+		end
+	end
+	return rarityChances
 end
 
 -- ── Mid-run trap drain ───────────────────────────────────────────────────────
