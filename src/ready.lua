@@ -1,7 +1,7 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- Hooks and pure library imports installed once at startup; side-effecting libraries (rivals, weapons) load from ready_late.lua instead.
+-- Imports every feature module and registers the uncontested hooks; contested wraps and one-time installs live in ready_late.lua.
 
 -- ── Library modules (pure definitions) ────────────────────────────────────────
 
@@ -41,7 +41,7 @@ sjson.hook(helpfile, function(data)
 	H2AP_ProphecyRelabelHelpText(data)
 end)
 
--- Weapon / tool / hidden-aspect shop labels live in TraitText, not HelpText.
+-- Weapon / tool / aspect shop labels live in TraitText, not HelpText.
 local traitfile = rom.path.combine(rom.paths.Content, 'Game/Text/en/TraitText.en.sjson')
 sjson.hook(traitfile, function(data)
 	H2AP_WeaponRelabelTraitText(data)
@@ -55,62 +55,38 @@ sjson.hook(animfile, function(data)
 	return sjson_ItemAnimations(data)
 end)
 
--- ── Debug keybind ─────────────────────────────────────────────────────────────
+-- ── Game function wraps ───────────────────────────────────────────────────────
+
+-- Boss rewards
+modutil.mod.Path.Wrap("SpawnRoomReward", H2AP_OnSpawnRoomReward)
+
+-- Cauldron
+modutil.mod.Path.Wrap("HandleGhostAdminPurchase", H2AP_OnCauldronPurchase)
+modutil.mod.Path.Wrap("GhostAdminDisplayCategory", H2AP_OnCauldronDisplayCategory)
+
+-- Keepsakes
+modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", H2AP_OnKeepsakeGifted)
+modutil.mod.Path.Wrap("CreateKeepsakeIcon", H2AP_OnCreateKeepsakeIcon)
+
+-- Familiars
+modutil.mod.Path.Wrap("FamiliarRecruitPresentation", H2AP_OnFamiliarRecruited)
+
+-- Prophecies
+modutil.mod.Path.Wrap("OpenQuestLogScreen", H2AP_OnOpenQuestLog)
+modutil.mod.Path.Wrap("CashOutQuest", H2AP_OnCashOutQuest)
+
+-- Aspects
+modutil.mod.Path.Wrap("HasAnyAspectUnlocked", H2AP_OnHasAnyAspectUnlocked)
+
+-- Fear
+modutil.mod.Path.Wrap("UseShrineObject", H2AP_OnUseShrine)
+
+-- ── Debug helpers ─────────────────────────────────────────────────────────────
 
 -- Press the Gift button to receive a test Ash pack (verifies IPC and AddResource).
 -- game.OnControlPressed({'Gift', function()
 -- 	H2AP_GiveItem("Ash")
 -- end})
-
--- ── Room / map hooks ─────────────────────────────────────────────────────────
--- SetupMap, OnAllEnemiesDead and KillHero wraps live in ready_late.lua for deterministic chain order with other mods.
-
--- Boss reward dispatcher: ap_check spawns an AP pickup, fallback drops Nightmare + Gemstones, vanilla passes through.
-modutil.mod.Path.Wrap("SpawnRoomReward", H2AP_OnSpawnRoomReward)
-
--- ── Cauldron interception ────────────────────────────────────────────────────
-
--- Three-way cauldron dispatch: surface-lock and cauldronsanity brews send the AP check and suppress the vanilla effect, everything else runs vanilla.
-modutil.mod.Path.Wrap("HandleGhostAdminPurchase", H2AP_OnCauldronPurchase)
--- ── Keepsakesanity location check ────────────────────────────────────────────
-
--- Keepsakesanity: undo the vanilla keepsake grant, send the check, and flag AP_KeepsakeChecked so GiftLogic doesn't re-fire this presentation.
-modutil.mod.Path.Wrap("PlayerReceivedGiftPresentation", H2AP_OnKeepsakeGifted)
-
--- ── Familiarsanity location check ─────────────────────────────────────────────
-
--- Familiarsanity: recruiting sends the check, then the vanilla FamiliarsUnlocked grant is undone unless the AP item already delivered it.
-modutil.mod.Path.Wrap("FamiliarRecruitPresentation", H2AP_OnFamiliarRecruited)
-
--- ── Keepsake equip screen unlock fix ─────────────────────────────────────────
-
--- The rack screen computes Unlocked from the (emptied) GiftData requirements, so recompute it from GiftPresentation / AP receipt.
-modutil.mod.Path.Wrap("CreateKeepsakeIcon", H2AP_OnCreateKeepsakeIcon)
-
--- ── Hint dispatch on cauldron / Fated List open ──────────────────────────────
-
--- Mask surface-lock incantations to their AP-checked state while the offer list builds, then hint every visible incantation.
-modutil.mod.Path.Wrap("GhostAdminDisplayCategory", H2AP_OnCauldronDisplayCategory)
--- Hint each visible prophecy when the Fated List opens.
-modutil.mod.Path.Wrap("OpenQuestLogScreen", H2AP_OnOpenQuestLog)
--- ── Fatesanity: intercept prophecy cashout ───────────────────────────────────
-
--- Fatesanity: replicate CashOutQuest minus its AddResource, which the AP item delivers instead.
-modutil.mod.Path.Wrap("CashOutQuest", H2AP_OnCashOutQuest)
--- ── Hidden aspect unlock tracking ────────────────────────────────────────────
-
--- Aspect sanity: re-point HasAnyAspectUnlocked at WeaponsUnlocked so the kit prompt tracks the AP item, not the shop check.
-modutil.mod.Path.Wrap("HasAnyAspectUnlocked", H2AP_OnHasAnyAspectUnlocked)
-
--- ── Death hook ────────────────────────────────────────────────────────────────
--- The KillHero wrap lives in ready_late.lua (4 other installed mods also hook it).
-
--- ── Shrine access block ───────────────────────────────────────────────────────
-
--- Block the shrine screen when the mod manages vow levels (reverse/minimal fear).
-modutil.mod.Path.Wrap("UseShrineObject", H2AP_OnUseShrine)
-
--- ── Unlock all grasp ──────────────────────────────────────────────────────────
 
 -- Uncomment to remove all Arcana Grasp costs (useful for testing progression).
 -- modutil.mod.Path.Set("MetaUpgradeCostData.MetaUpgradeLevelData", {

@@ -50,7 +50,7 @@ local function on_reload()
 	-- only do things that are safe to run over and over.
 	if config.enabled == false then return end
 
-	import 'reload.lua'
+	-- reload.lua is kept as an empty template and intentionally not imported.
 end
 
 local function on_ready_late()

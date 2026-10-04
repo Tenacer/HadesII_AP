@@ -2,11 +2,11 @@
 -- globals we define are private to our plugin!
 ---@diagnostic disable: lowercase-global
 
--- here is where your mod sets up all the things it will do after all other mods load.
--- this file will not be reloaded if it changes during gameplay.
+-- One-time installs, startup patches and the wraps other mods also hook; runs after all mods load.
 
 -- ── One-time installs ─────────────────────────────────────────────────────────
 
+-- Reverse-order Vow of Rivals override.
 H2AP_InstallReverseRivals()
 -- Starting weapon for fresh saves and existing saves.
 H2AP_ApplyStartingWeapon()

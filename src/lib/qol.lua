@@ -1,10 +1,16 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── Broker QoL unlock ─────────────────────────────────────────────────────────
--- Under unlock_broker, grant the Broker from game start by setting its WorldUpgrade flags before the hub loads.
+-- Quality of life: unlocks granted from the start by slot-data options.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
 
 local BROKER_WORLD_UPGRADE = "WorldUpgradeMarket"
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
+-- ── Broker QoL unlock ─────────────────────────────────────────────────────────
+-- Under unlock_broker, grant the Broker from game start by setting its WorldUpgrade flags before the hub loads.
 
 function H2AP_ApplyUnlockBroker()
 	local settings = H2AP_LoadSettings()
