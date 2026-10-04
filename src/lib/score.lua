@@ -1,7 +1,9 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── Score tracking ────────────────────────────────────────────────────────────
+-- Score: room-clear score checks (score_based) and per-depth room checks (room_based / room_weapon_based).
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
 
 -- Per-biome score points (room-name prefix → points per regular room), ramping 1→4 per route.
 local BIOME_POINTS = {
@@ -29,20 +31,29 @@ local SCORE_EXCLUDED_ENCOUNTER_TYPES = {
 	EliteChallenge = true,
 }
 
-local function encounter_awards_score(encounter)
-	if not encounter then return false end
-	local etype = encounter.EncounterType
-	if etype == nil then return false end
-	return not SCORE_EXCLUDED_ENCOUNTER_TYPES[etype]
-end
-
--- ── Room-based location systems (room_based / room_weapon_based) ───────────────
 -- Per-route max run depth; MUST match the apworld's UNDERWORLD_ROOM_MAX / SURFACE_ROOM_MAX in Locations.py.
 -- TODO(confirm): estimates — update both sides from the depths logged during a full run.
 local ROOM_DEPTH_MAX = { underworld = 40, surface = 36 }
 -- Run depth where Tartarus begins; the Chronos-kill auto-grant covers from here to the underworld max.
 local UNDERWORLD_AUTOGRANT_FROM = 26
 local ROUTE_LABEL = { underworld = "Underworld", surface = "Surface" }
+
+-- Score-check gap curve: slow rise → plateau → final ramp, tuned by the constants below.
+local SCORE_P1, SCORE_P2 = 0.25, 0.70      -- end of first rise / start of finale (fractions)
+local SCORE_G0, SCORE_G1, SCORE_G2 = 2, 11, 18  -- start / plateau / end gap (points)
+
+
+local COLOR_SCORE    = { 0.85, 0.85, 0.85, 1.00 }
+local COLOR_MSTONE   = { 1.00, 0.85, 0.45, 1.00 }
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
+local function encounter_awards_score(encounter)
+	if not encounter then return false end
+	local etype = encounter.EncounterType
+	if etype == nil then return false end
+	return not SCORE_EXCLUDED_ENCOUNTER_TYPES[etype]
+end
 
 -- Resolves the active location system from slot data (accepts raw int or option string).
 function H2AP_LocationSystem()
@@ -75,10 +86,6 @@ local function H2AP_FireRoomCheck(route, depth, system)
 	end
 	H2AP_CheckLocation(name)
 end
-
--- Score-check gap curve: slow rise → plateau → final ramp, tuned by the constants below.
-local SCORE_P1, SCORE_P2 = 0.25, 0.70      -- end of first rise / start of finale (fractions)
-local SCORE_G0, SCORE_G1, SCORE_G2 = 2, 11, 18  -- start / plateau / end gap (points)
 
 local function smoothstep(x)
 	if x < 0 then x = 0 elseif x > 1 then x = 1 end
@@ -157,33 +164,6 @@ local function H2AP_ScoreChecksSent(state, settings, max_checks)
 	return under_checks, surface_checks
 end
 
--- Evaluate the BossDefeats goal after a boss kill and flag victory if met (True Ending victory fires in death.lua instead).
-function H2AP_CheckBossDefeatsVictory()
-	local settings = H2AP_LoadSettings() or {}
-	if settings.true_ending == true or settings.true_ending == 1 then return end
-
-	local state = H2AP_LoadState()
-	if state.victory then return end
-
-	local chronos = state.chronos_kills or 0
-	local typhon  = state.typhon_kills or 0
-	local mode    = settings.boss_defeats_mode
-	local met
-	if mode == 1 or mode == "separate" then
-		met = chronos >= (settings.chronos_kills_needed or 7)
-			and typhon >= (settings.typhon_kills_needed or 5)
-	else
-		met = (chronos + typhon) >= (settings.boss_defeats_needed or 5)
-	end
-
-	if met then
-		state.victory = true
-		print("[HadesII_AP] BossDefeats goal met — victory!")
-		H2AP_SaveState()
-		H2AP_FlushOutbox()
-	end
-end
-
 -- Room-based counting trigger; hooked to DoUnlockRoomExits so non-combat rooms still count their depth.
 function H2AP_OnRoomExitsUnlocked(currentRoom)
 	if not currentRoom then return end
@@ -213,8 +193,21 @@ function H2AP_OnRoomExitsUnlocked(currentRoom)
 	if dirty then H2AP_SaveState() end
 end
 
--- Credit room-clear score for one cleared room; shared by regular rooms and the final-boss branch.
-local function credit_room_score(currentRoom, currentEncounter)
+-- Tartarus depth is variable, so auto-grant the deep underworld room checks on the Chronos kill.
+function H2AP_GrantUnderworldRoomTail(boss_key)
+	if boss_key ~= "chronos" then return end
+	local system = H2AP_LocationSystem()
+	if system == "room" or system == "room_weapon" then
+		for depth = UNDERWORLD_AUTOGRANT_FROM, ROOM_DEPTH_MAX.underworld do
+			H2AP_FireRoomCheck("underworld", depth, system)
+		end
+		print("[HadesII_AP] Chronos cleared — auto-granted underworld room tail "
+			.. UNDERWORLD_AUTOGRANT_FROM .. ".." .. ROOM_DEPTH_MAX.underworld)
+	end
+end
+
+-- Credit room-clear score for one cleared room; final-boss rooms award it like any other room.
+function H2AP_CreditRoomScore(currentRoom, currentEncounter)
 	local biome  = currentRoom.Name and currentRoom.Name:sub(1, 1) or ""
 	local route  = ROUTE_FOR_BIOME[biome] or "underworld"
 	local system = H2AP_LocationSystem()
@@ -282,65 +275,7 @@ local function credit_room_score(currentRoom, currentEncounter)
 	H2AP_FlushOutbox()
 end
 
-function H2AP_OnRoomCleared(currentRoom, currentEncounter)
-	if not currentRoom then return end
-
-	-- Boss rooms: bump the kill counter; the AP check fires from the pickup's OnUsed handler.
-	local boss_key = H2AP_BossForRoom(currentRoom)
-	if boss_key then
-		local state = H2AP_LoadState()
-		local field = boss_key .. "_kills"
-		state[field] = (state[field] or 0) + 1
-
-		H2AP_RecordStormStopKill(boss_key)
-
-		H2AP_RecordWeaponClear()
-
-		H2AP_SaveState()
-
-		-- BossDefeats goal check (no-op under True Ending).
-		H2AP_CheckBossDefeatsVictory()
-
-		-- Tartarus depth is variable, so auto-grant the deep underworld room checks on the Chronos kill.
-		if boss_key == "chronos" then
-			local system = H2AP_LocationSystem()
-			if system == "room" or system == "room_weapon" then
-				for depth = UNDERWORLD_AUTOGRANT_FROM, ROOM_DEPTH_MAX.underworld do
-					H2AP_FireRoomCheck("underworld", depth, system)
-				end
-				print("[HadesII_AP] Chronos cleared — auto-granted underworld room tail "
-					.. UNDERWORLD_AUTOGRANT_FROM .. ".." .. ROOM_DEPTH_MAX.underworld)
-			end
-		end
-
-		local settings = H2AP_LoadSettings() or {}
-		-- Redirect the exit to EndEarlyAccessPresentation, except on a True Ending run with both goal incantations (the credits must play).
-		local is_te_run = settings.true_ending
-			and GameState and GameState.WorldUpgrades
-			and GameState.WorldUpgrades.WorldUpgradeTimeStop
-			and GameState.WorldUpgrades.WorldUpgradeStormStop
-		if settings.score_rewards_amount ~= nil
-				and not (CurrentRun and CurrentRun.IsDreamRun)
-				and not (GameState and GameState.ReachedTrueEnding)
-				and not is_te_run then
-			CurrentRun.CurrentRoom.ExitFunctionName = "EndEarlyAccessPresentation"
-			CurrentRun.CurrentRoom.SkipLoadNextMap  = true
-			print("[HadesII_AP] Boss cleared — exit redirected to EndEarlyAccessPresentation")
-		end
-
-		-- Final-boss rooms award room-clear score like any other room.
-		credit_room_score(currentRoom, currentEncounter)
-		return
-	end
-
-	-- Regular rooms: credit room-clear score.
-	credit_room_score(currentRoom, currentEncounter)
-end
-
 -- ═══ Presentation ════════════════════════════════════════════════════════════
-
-local COLOR_SCORE    = { 0.85, 0.85, 0.85, 1.00 }
-local COLOR_MSTONE   = { 1.00, 0.85, 0.45, 1.00 }
 
 -- Score ticks fire every cleared room, so no sound; route_label is shown in separate split mode, nil in combined.
 function H2AP_NotifyScore(delta, total, route_label, to_next)

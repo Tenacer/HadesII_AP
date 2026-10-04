@@ -260,27 +260,8 @@ function H2AP_GiveItem(item_name)
 	if handled ~= nil then return handled end
 	handled = H2AP_CauldronGiveItem(item_name)
 	if handled ~= nil then return handled end
-	-- True Ending ingredients: grant the resource and let H2AP_SyncStoryFlags handle flags.
-	if item_name == "Zodiac Sand" then
-		AddResource("MixerIBoss", 1, _PLUGIN.guid)
-		print("[HadesII_AP] Gave Zodiac Sand (MixerIBoss)")
-		return true
-	end
-	if item_name == "Void Lens" then
-		AddResource("MixerQBoss", 1, _PLUGIN.guid)
-		print("[HadesII_AP] Gave Void Lens (MixerQBoss)")
-		return true
-	end
-	if item_name == "Gigaros" then
-		AddResource("HadesSpearPoints", 1, _PLUGIN.guid)
-		print("[HadesII_AP] Gave Gigaros (HadesSpearPoints)")
-		return true
-	end
-	if item_name == "Entropy" then
-		AddResource("MixerMythic", 1, _PLUGIN.guid)
-		print("[HadesII_AP] Gave Entropy (MixerMythic)")
-		return true
-	end
+	handled = H2AP_GoalGiveItem(item_name)
+	if handled ~= nil then return handled end
 	handled = H2AP_KeepsakeGiveItem(item_name)
 	if handled ~= nil then return handled end
 	handled = H2AP_FamiliarGiveItem(item_name)
@@ -352,6 +333,15 @@ function H2AP_ProcessInbox()
 	-- Sync story flags and shrine levels on every poll (both idempotent).
 	H2AP_SyncStoryFlags(inbox)
 	H2AP_ApplyShrineLevels()
+end
+
+-- Count a regular death for DeathLink; amnesty is handled on the Python client side.
+function H2AP_RecordDeath()
+	local state = H2AP_LoadState()
+	state.deaths = (state.deaths or 0) + 1
+	print("[HadesII_AP] Death recorded (" .. state.deaths .. " total)")
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
 end
 
 -- Start the inbox polling thread once; called on the first SetupMap because thread() needs SessionMapState.

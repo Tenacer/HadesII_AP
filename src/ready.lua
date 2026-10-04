@@ -11,8 +11,6 @@ import 'lib/ipc.lua'
 import 'lib/cauldron.lua'
 import 'lib/prophecies.lua'
 import 'lib/keepsakes.lua'
-import 'lib/ItemData.lua'
-import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/tools.lua'
 import 'lib/weapons.lua'
@@ -20,9 +18,9 @@ import 'lib/aspects.lua'
 import 'lib/familiars.lua'
 import 'lib/traps.lua'
 import 'lib/qol.lua'
-import 'lib/bossreward.lua'
+import 'lib/bossrewards.lua'
 import 'lib/score.lua'
-import 'lib/death.lua'
+import 'lib/goal.lua'
 
 -- ── AP icon package ──────────────────────────────────────────────────────────
 
@@ -68,26 +66,7 @@ end)
 -- SetupMap, OnAllEnemiesDead and KillHero wraps live in ready_late.lua for deterministic chain order with other mods.
 
 -- Boss reward dispatcher: ap_check spawns an AP pickup, fallback drops Nightmare + Gemstones, vanilla passes through.
-modutil.mod.Path.Wrap("SpawnRoomReward", function(base, eventSource, args)
-	local currentRoom = CurrentRun and CurrentRun.CurrentRoom
-	local action = H2AP_BossRewardAction(currentRoom)
-	if action == "ap_check" then
-		local boss_key = H2AP_BossForRoom(currentRoom)
-		local ap_location = H2AP_BossCurrentLocationName(boss_key)
-		if ap_location then
-			print("[HadesII_AP] Spawning boss-reward pickup for " .. ap_location)
-			H2AP_SpawnApBossReward(ap_location)
-		end
-		return
-	end
-	if action == "fallback" then
-		print("[HadesII_AP] Boss kills past AP-check range — spawning Nightmare + Gemstones drops")
-		H2AP_SpawnConsumableDrop("WeaponPointsRareDrop", 30,  110)
-		H2AP_SpawnConsumableDrop("GemPointsBigDrop",     150, 110)
-		return
-	end
-	return base(eventSource, args)
-end)
+modutil.mod.Path.Wrap("SpawnRoomReward", H2AP_OnSpawnRoomReward)
 
 -- ── Cauldron interception ────────────────────────────────────────────────────
 

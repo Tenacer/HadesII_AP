@@ -49,10 +49,25 @@ modutil.mod.Path.Wrap("SetupMap", function(base, ...)
 	return base(...)
 end)
 
+-- Room clear: final-boss bookkeeping in a fixed order, then room-clear score.
+local function on_room_cleared(room, encounter)
+	if not room then return end
+	local boss_key = H2AP_BossForRoom(room)
+	if boss_key then
+		H2AP_RecordBossKill(boss_key)
+		H2AP_RecordStormStopKill(boss_key)
+		H2AP_RecordWeaponClear()
+		H2AP_CheckBossDefeatsVictory()
+		H2AP_GrantUnderworldRoomTail(boss_key)
+		H2AP_RedirectBossExit()
+	end
+	H2AP_CreditRoomScore(room, encounter)
+end
+
 -- Fires when all enemies in a room are dead: score a room clear or a boss kill.
 modutil.mod.Path.Wrap("OnAllEnemiesDead", function(base, currentRoom, currentEncounter)
 	local result = base(currentRoom, currentEncounter)
-	H2AP_OnRoomCleared(currentRoom, currentEncounter)
+	on_room_cleared(currentRoom, currentEncounter)
 	return result
 end)
 
@@ -67,15 +82,17 @@ end)
 modutil.mod.Path.Wrap("WaitForArachneRewardFound", function(base, encounter)
 	local result = base(encounter)
 	local room = CurrentRun and CurrentRun.CurrentRoom
-	H2AP_OnRoomCleared(room, encounter)
+	on_room_cleared(room, encounter)
 	H2AP_OnRoomExitsUnlocked(room)
 	return result
 end)
 
--- KillHero fires exactly once per Melinoë death.
+-- KillHero fires exactly once per Melinoë death: the credits death is the True Ending victory, any other counts for DeathLink.
 modutil.mod.Path.Wrap("KillHero", function(base, victim, triggerArgs)
 	local result = base(victim, triggerArgs)
-	H2AP_OnMelinoeDied()
+	if not H2AP_CheckTrueEndingVictory() then
+		H2AP_RecordDeath()
+	end
 	return result
 end)
 

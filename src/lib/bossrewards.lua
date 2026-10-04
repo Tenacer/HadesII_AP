@@ -1,23 +1,15 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── AP reward visuals ─────────────────────────────────────────────────────────
+-- Boss rewards: per-kill AP checks on the Chronos and Typhon rewards under True Ending, with fallback drops past the check range.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
 
 -- Carrier obstacle for the "AP icon" case; visual overridden after spawn, AddResources nilled.
 AP_ICON_CARRIER_OBSTACLE = "WeaponPointsRareDrop"
 
 -- World-obstacle animation for the AP logo, registered into Items_General_VFX.
 AP_REWARD_ANIM = "APRewardIcon"
-
--- Registers an Animation for our AP logo so it can be a world obstacle's graphic.
-function sjson_ItemAnimations(data)
-	if data == nil or data.Animations == nil then return end
-	table.insert(data.Animations, {
-		Name        = AP_REWARD_ANIM,
-		InheritFrom = "BaseMetaRewardAnimatedDrop",
-		FilePath    = AP_ICON_ANIM,
-	})
-end
 
 -- Maps a local AP item name to the ConsumableData drop with the matching visual; unmapped items use the AP icon obstacle.
 RESOURCE_OBSTACLE_FOR_ITEM = {
@@ -32,8 +24,6 @@ RESOURCE_OBSTACLE_FOR_ITEM = {
 	["Fate Fabric"] = "MetaFabricDrop",
 	["Gemstones"]   = "GemPointsBigDrop",
 }
-
--- ── Boss identification & kill counting ───────────────────────────────────────
 
 -- Maps boss room name → boss identifier (for the per-kill reward indexing).
 local BOSS_ROOM_TO_BOSS = {
@@ -51,6 +41,10 @@ local BOSS_LOCATION_BASE_NAME = {
 	chronos = "Chronos Kill Reward",
 	typhon  = "Typhon Kill Reward",
 }
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
+-- ── Boss identification & kill counting ───────────────────────────────────────
 
 -- Returns the boss key ("chronos"/"typhon") if this room is a final boss room.
 function H2AP_BossForRoom(currentRoom)
@@ -73,7 +67,7 @@ function H2AP_BossKillCount(boss_key)
 	return state[boss_key .. "_kills"] or 0
 end
 
--- Returns "ap_check" / "fallback" / "vanilla" / nil for this room's boss reward; must run after H2AP_OnRoomCleared incremented the kill counter.
+-- Returns "ap_check" / "fallback" / "vanilla" / nil for this room's boss reward; must run after H2AP_RecordBossKill incremented the kill counter.
 function H2AP_BossRewardAction(currentRoom)
 	local boss_key = H2AP_BossForRoom(currentRoom)
 	if not boss_key then return nil end
@@ -100,6 +94,14 @@ function H2AP_BossCurrentLocationName(boss_key)
 	local count = H2AP_BossKillCount(boss_key)
 	if count <= 0 then return nil end
 	return BOSS_LOCATION_BASE_NAME[boss_key] .. " " .. tostring(count)
+end
+
+-- Bump the kill counter for a final-boss kill; the AP check fires later from the pickup's OnUsed handler.
+function H2AP_RecordBossKill(boss_key)
+	local state = H2AP_LoadState()
+	local field = boss_key .. "_kills"
+	state[field] = (state[field] or 0) + 1
+	H2AP_SaveState()
 end
 
 -- ── Reward spawning ───────────────────────────────────────────────────────────
@@ -175,4 +177,38 @@ function H2AP_SpawnApBossReward(ap_location)
 		end
 	end
 	return reward
+end
+
+-- SpawnRoomReward wrap: ap_check spawns an AP pickup, fallback drops Nightmare + Gemstones, vanilla passes through.
+function H2AP_OnSpawnRoomReward(base, eventSource, args)
+	local currentRoom = CurrentRun and CurrentRun.CurrentRoom
+	local action = H2AP_BossRewardAction(currentRoom)
+	if action == "ap_check" then
+		local boss_key = H2AP_BossForRoom(currentRoom)
+		local ap_location = H2AP_BossCurrentLocationName(boss_key)
+		if ap_location then
+			print("[HadesII_AP] Spawning boss-reward pickup for " .. ap_location)
+			H2AP_SpawnApBossReward(ap_location)
+		end
+		return
+	end
+	if action == "fallback" then
+		print("[HadesII_AP] Boss kills past AP-check range — spawning Nightmare + Gemstones drops")
+		H2AP_SpawnConsumableDrop("WeaponPointsRareDrop", 30,  110)
+		H2AP_SpawnConsumableDrop("GemPointsBigDrop",     150, 110)
+		return
+	end
+	return base(eventSource, args)
+end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+-- Registers an Animation for our AP logo so it can be a world obstacle's graphic.
+function sjson_ItemAnimations(data)
+	if data == nil or data.Animations == nil then return end
+	table.insert(data.Animations, {
+		Name        = AP_REWARD_ANIM,
+		InheritFrom = "BaseMetaRewardAnimatedDrop",
+		FilePath    = AP_ICON_ANIM,
+	})
 end
