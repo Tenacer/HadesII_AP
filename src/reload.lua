@@ -3,11 +3,6 @@
 
 -- Hot-reloadable AP-icon / text-label helpers and SJSON hook handlers; library modules import from ready.lua / ready_late.lua instead.
 
--- ── AP icon ───────────────────────────────────────────────────────────────────
-
--- Animation name for our custom AP logo, packed in Tenacer_AP-HadesII_AP.pkg.
-AP_ICON_ANIM = _PLUGIN.guid .. "\\ap_icon"
-
 -- Show the Archipelago logo instead of per-spell artwork on every AP-controlled incantation.
 function H2AP_PatchIncantationIcons()
 	if WorldUpgradeData == nil then return end
@@ -117,60 +112,9 @@ function H2AP_ShowKeepsakeCheckBanner(npc)
 	end)
 end
 
--- Show the AP logo banner when a boss reward location check fires.
-function H2AP_ShowBossRewardBanner()
-	thread(function()
-		DisplayInfoBanner(nil, {
-			TitleText = "APCheckSent",
-			FontScale = 0.82,
-			Icon = AP_ICON_ANIM,
-			IconScale = 1.3,
-			IconMoveSpeed = 0.00001,
-			IconOffsetY = 6,
-			AnimationName = "InfoBannerCauldronIn",
-			AnimationOutName = "InfoBannerCauldronOut",
-			IconBackingAnimationName = "LocationBackingIrisSmallSubtitleIn",
-			IconBackingAnimationOutName = "LocationBackingIrisSmallSubtitleOut",
-		})
-	end)
-end
-
 -- ── SJSON hook handlers ───────────────────────────────────────────────────────
 
-function sjson_ShellText(data)
-	for _, v in ipairs(data.Texts) do
-		if v.Id == 'MainMenuScreen_PlayGame' then
-			v.DisplayName = 'Play Hades II AP'
-			break
-		end
-	end
-end
-
--- Rewrite a text entry to advertise the scouted AP item at `ap_location`, preserving the vanilla name/description.
-function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
-	local item_entry = location_items[ap_location]
-	local display = "AP Location Check"
-	if type(item_entry) == "table" then
-		display = item_entry.display or item_entry.item_name or display
-	elseif type(item_entry) == "string" then
-		-- Back-compat with the older flat string format.
-		display = item_entry
-	end
-	local vanilla_name = entry.DisplayName
-	local vanilla_desc = entry.Description
-	local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
-	local new_desc = "Archipelago location check for " .. opener .. "."
-	if vanilla_desc and vanilla_desc ~= "" then
-		new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
-	end
-	entry.DisplayName = display
-	entry.Description = new_desc
-end
-
 function sjson_HelpText(data)
-	-- Inject the "AP Check Sent" banner title used by the cauldron hook.
-	data.Texts[#data.Texts + 1] = { Id = "APCheckSent", DisplayName = "AP Check Sent" }
-
 	-- Replace incantation / prophecy entries with AP info when their sanity option is on (weapon/tool/aspect labels live in TraitText).
 	local settings = H2AP_LoadSettings() or {}
 	local do_cauldron = settings.cauldronsanity == 1

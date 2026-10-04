@@ -56,7 +56,7 @@ modutil.mod.Path.Set("IsBossDifficultyShrineUpgradeActive", ap_is_boss_difficult
 print("[HadesII_AP] Reverse rivals: IsBossDifficultyShrineUpgradeActive override installed")
 
 -- ── Vow incantation requirement patching ─────────────────────────────────────
--- Rewrite the T2/T3/T4 vow incantation encounter gates for reverse order and strip T4's post-ending gates; called lazily from H2AP_SetupMap to avoid the App.Reset GC crash.
+-- Rewrite the T2/T3/T4 vow incantation encounter gates for reverse order and strip T4's post-ending gates; called lazily from the SetupMap wrap to avoid the App.Reset GC crash.
 
 local AP_REVERSE_PATCH_FLAG = "_ap_reverse_rivals_patched"
 

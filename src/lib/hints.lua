@@ -1,22 +1,6 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── Hint dispatch ─────────────────────────────────────────────────────────────
--- Persisted, deduped list of locations the Python client should hint (LocationScouts create_as_hint=2).
-
-function H2AP_HintLocation(name)
-	local state = H2AP_LoadState()
-	state.hinted_locations = state.hinted_locations or {}
-	for _, existing in ipairs(state.hinted_locations) do
-		if existing == name then return false end
-	end
-	table.insert(state.hinted_locations, name)
-	print("[HadesII_AP] Location hinted: " .. name)
-	H2AP_SaveState()
-	H2AP_FlushOutbox()
-	return true
-end
-
 -- ── Cauldron: hint visible incantations on category display ───────────────────
 
 function H2AP_HintCauldronVisible(screen)

@@ -139,7 +139,7 @@ function H2AP_OnBossDropUsed(usee, args, user)
 	if usee and usee.APLocation then
 		print("[HadesII_AP] Boss reward picked up — sending " .. usee.APLocation)
 		H2AP_CheckLocation(usee.APLocation)
-		H2AP_ShowBossRewardBanner()
+		H2AP_ShowCheckSentBanner()
 	end
 	if UseConsumableItem then
 		UseConsumableItem(usee, args, user)

@@ -1,7 +1,35 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── IPC path detection ────────────────────────────────────────────────────────
+-- Communication with the Python client: settings, state persistence, outbox/inbox, location checks, hints and item dispatch.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
+
+-- ── State fields ──────────────────────────────────────────────────────────────
+-- Persisted as JSON so complex fields (checked_locations array) survive restarts.
+-- Fields:
+--   score              (int)   — cumulative room-clear score (sum of the two routes; display only)
+--   score_underworld   (int)   — cumulative score on the underworld/Chronos route (F/G/H/I)
+--   score_surface      (int)   — cumulative score on the surface/Typhon route (N/O/P/Q)
+--   checks_sent        (int)   — number of score checks earned so far (combined total)
+--   checks_sent_underworld (int) — score checks earned from the underworld budget (separate mode)
+--   checks_sent_surface    (int) — score checks earned from the surface budget (separate mode)
+--   items_index        (int)   — next AP item index to process
+--   deaths             (int)   — raw death counter forwarded to DeathLink
+--   victory            (bool)  — true once the goal condition is met
+--   checked_locations  (array) — AP location names reported to the Python client
+--   hinted_locations   (array) — AP location names the Python client should hint (create_as_hint=2)
+--   last_deathlink_seq (int)   — seq of last processed incoming DeathLink (dedup guard)
+--   vow_received       (table) — shrine_upgrade_name -> count of vow items received (reverse_Fear)
+--   chronos_kills      (int)   — Chronos kills observed (per-kill reward indexing, True Ending)
+--   typhon_kills       (int)   — Typhon  kills observed (per-kill reward indexing, True Ending)
+--   weapon_clears      (table) — set of internal weapon names that have cleared a
+--                                final boss (distinct-clear count for the weapons goal)
+
+local COLOR_SENT     = { 0.55, 0.85, 1.00, 1.00 }
+local COLOR_RECEIVED = { 0.65, 1.00, 0.65, 1.00 }
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
 
 -- ── Settings (written by Python client on AP connect) ─────────────────────────
 -- Cached once the file is found; retried on every call until then.
@@ -129,4 +157,409 @@ function H2AP_GetLocationItem(name)
 	local entry = data[name]
 	if type(entry) == "table" then return entry end
 	return nil
+end
+
+-- ── State persistence ─────────────────────────────────────────────────────────
+
+local _state = nil
+
+local function state_path() return H2AP_Dir() .. "ap_state_" .. H2AP_WorldId() .. ".json" end
+
+function H2AP_LoadState()
+	if _state then return _state end
+	_state = {
+		score              = 0,
+		score_underworld   = 0,
+		score_surface      = 0,
+		checks_sent        = 0,
+		checks_sent_underworld = 0,
+		checks_sent_surface    = 0,
+		items_index        = 0,
+		deaths             = 0,
+		victory            = false,
+		checked_locations  = {},
+		hinted_locations   = {},
+		last_deathlink_seq = -1,
+		vow_received       = {},
+		chronos_kills      = 0,
+		typhon_kills       = 0,
+		weapon_clears      = {},
+	}
+	local f = io.open(state_path(), "r")
+	if not f then return _state end
+	local raw = f:read("*a")
+	f:close()
+	local parsed = H2AP_JsonDecode(raw)
+	if type(parsed) == "table" then
+		_state = parsed
+		if type(_state.checked_locations) ~= "table" then
+			_state.checked_locations = {}
+		end
+		if type(_state.hinted_locations) ~= "table" then
+			_state.hinted_locations = {}
+		end
+		if type(_state.weapon_clears) ~= "table" then
+			_state.weapon_clears = {}
+		end
+		-- Migration: attribute a legacy combined score entirely to the underworld route.
+		if type(_state.score_underworld) ~= "number" then
+			_state.score_underworld = _state.score or 0
+		end
+		if type(_state.score_surface) ~= "number" then
+			_state.score_surface = 0
+		end
+	end
+	return _state
+end
+
+-- Number of distinct weapons that have cleared a final boss (weapons goal).
+function H2AP_DistinctWeaponClears()
+	local n = 0
+	for _ in pairs(H2AP_LoadState().weapon_clears) do n = n + 1 end
+	return n
+end
+
+function H2AP_SaveState()
+	local s = H2AP_LoadState()
+	local f = io.open(state_path(), "w")
+	if not f then print("[HadesII_AP] ERROR: could not write state") return end
+	f:write(H2AP_JsonVal(s))
+	f:close()
+end
+
+-- ── Location tracking ─────────────────────────────────────────────────────────
+
+function H2AP_CheckLocation(name)
+	local state = H2AP_LoadState()
+	for _, existing in ipairs(state.checked_locations) do
+		if existing == name then return end  -- already recorded
+	end
+	table.insert(state.checked_locations, name)
+	print("[HadesII_AP] Location checked: " .. name)
+	H2AP_NotifySent(name)
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
+end
+
+-- ── Hints ─────────────────────────────────────────────────────────────────────
+-- Persisted, deduped list of locations the Python client should hint (LocationScouts create_as_hint=2).
+
+function H2AP_HintLocation(name)
+	local state = H2AP_LoadState()
+	state.hinted_locations = state.hinted_locations or {}
+	for _, existing in ipairs(state.hinted_locations) do
+		if existing == name then return false end
+	end
+	table.insert(state.hinted_locations, name)
+	print("[HadesII_AP] Location hinted: " .. name)
+	H2AP_SaveState()
+	H2AP_FlushOutbox()
+	return true
+end
+
+-- ── Item granting ─────────────────────────────────────────────────────────────
+
+function H2AP_GiveItem(item_name)
+	-- Vow items: reverse_Fear only — unlock a rank of the corresponding shrine vow.
+	if H2AP_GetShrineForVowItem(item_name) then
+		return H2AP_GiveItemVow(item_name)
+	end
+
+	-- Traps: queue mid-run effects (drained from the SetupMap wrap).
+	if TRAP_ITEMS and TRAP_ITEMS[item_name] then
+		return H2AP_GiveItemTrap(item_name)
+	end
+
+	-- Helpers: persistent stat boosts (MaxHealth, InitialMoney, BoonBoost).
+	if HELPER_ITEMS and HELPER_ITEMS[item_name] then
+		return H2AP_GiveItemHelper(item_name)
+	end
+
+	local filler = FILLER_ITEMS[item_name]
+	if filler then
+		local settings = H2AP_LoadSettings()
+		local amount = (settings and settings[filler.setting]) or 1
+		AddResource(filler.resource, amount, _PLUGIN.guid)
+		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
+		return true
+	end
+	-- Incantations deliver their effect from the received AP item; the location check fires on brew.
+	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
+	if wu_key then
+		local settings = H2AP_LoadSettings()
+		if H2AP_IsApKeyedIncantation(wu_key, settings) then
+			-- Surface-lock: grant only WorldUpgrades so the brew/story sequence stays alive; SurfacePenaltyCure also needs WorldUpgradesAdded since part of its cure is gated on it.
+			GameState.WorldUpgrades[wu_key]       = true
+			GameState.WorldUpgradesViewed[wu_key] = true
+			if wu_key == "WorldUpgradeSurfacePenaltyCure" then
+				GameState.WorldUpgradesAdded[wu_key]    = true
+				GameState.WorldUpgradesRevealed[wu_key] = true
+				if CurrentRun and CurrentRun.WorldUpgradesAdded then
+					CurrentRun.WorldUpgradesAdded[wu_key] = true
+				end
+			end
+			print("[HadesII_AP] Incantation effect granted: " .. item_name)
+			return true
+		end
+		-- Cauldronsanity 86: apply effect directly (vanilla brew is suppressed).
+		GameState.WorldUpgrades[wu_key]         = true
+		GameState.WorldUpgradesAdded[wu_key]    = true
+		GameState.WorldUpgradesViewed[wu_key]   = true
+		GameState.WorldUpgradesRevealed[wu_key] = true
+		local itemData = WorldUpgradeData and WorldUpgradeData[wu_key]
+		if itemData and itemData.OnActivateFinishedFunctionName then
+			pcall(CallFunctionName, itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
+		end
+		print("[HadesII_AP] Incantation unlocked: " .. item_name)
+		return true
+	end
+	-- True Ending ingredients: grant the resource and let H2AP_SyncStoryFlags handle flags.
+	if item_name == "Zodiac Sand" then
+		AddResource("MixerIBoss", 1, _PLUGIN.guid)
+		print("[HadesII_AP] Gave Zodiac Sand (MixerIBoss)")
+		return true
+	end
+	if item_name == "Void Lens" then
+		AddResource("MixerQBoss", 1, _PLUGIN.guid)
+		print("[HadesII_AP] Gave Void Lens (MixerQBoss)")
+		return true
+	end
+	if item_name == "Gigaros" then
+		AddResource("HadesSpearPoints", 1, _PLUGIN.guid)
+		print("[HadesII_AP] Gave Gigaros (HadesSpearPoints)")
+		return true
+	end
+	if item_name == "Entropy" then
+		AddResource("MixerMythic", 1, _PLUGIN.guid)
+		print("[HadesII_AP] Gave Entropy (MixerMythic)")
+		return true
+	end
+	-- Keepsakes: track the AP unlock in AP_KeepsakeReceived so GiftPresentation stays clear and the gifting check remains reachable.
+	local gift_id = KEEPSAKE_GIFT_IDS[item_name]
+	if gift_id then
+		GameState.AP_KeepsakeReceived = GameState.AP_KeepsakeReceived or {}
+		GameState.AP_KeepsakeReceived[gift_id] = true
+		print("[HadesII_AP] Gave keepsake: " .. item_name)
+		return true
+	end
+	-- Familiars: set FamiliarsUnlocked (the whole unlock) and record AP_FamiliarReceived so a later recruit doesn't undo it.
+	local familiar = FAMILIAR_ITEM_TO_NAME and FAMILIAR_ITEM_TO_NAME[item_name]
+	if familiar then
+		GameState.AP_FamiliarReceived = GameState.AP_FamiliarReceived or {}
+		GameState.AP_FamiliarReceived[familiar] = true
+		GameState.FamiliarsUnlocked = GameState.FamiliarsUnlocked or {}
+		GameState.FamiliarsUnlocked[familiar] = true
+		if CurrentRun then
+			CurrentRun.FamiliarsUnlocked = CurrentRun.FamiliarsUnlocked or {}
+			CurrentRun.FamiliarsUnlocked[familiar] = true
+		end
+		print("[HadesII_AP] Gave familiar: " .. item_name .. " (" .. familiar .. ")")
+		return true
+	end
+	-- Tools: set WeaponsUnlocked only; WorldUpgradesAdded belongs to the shop interception so the slot check stays reachable.
+	local tool = TOOL_ITEM_TO_NAME and TOOL_ITEM_TO_NAME[item_name]
+	if tool then
+		GameState.WeaponsUnlocked[tool]         = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[tool] = true
+		end
+		print("[HadesII_AP] Gave tool: " .. item_name .. " (" .. tool .. ")")
+		return true
+	end
+	-- Weapons: set WeaponsUnlocked only (same shop-slot reasoning as tools), then refresh the live kit if the player is at it.
+	local weapon = WEAPON_ITEM_TO_NAME and WEAPON_ITEM_TO_NAME[item_name]
+	if weapon then
+		GameState.WeaponsUnlocked[weapon]        = true
+		GameState.WeaponsTouched[weapon]         = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[weapon] = true
+		end
+		pcall(function()
+			local kit = GetWeaponKit and GetWeaponKit(weapon)
+			if kit then
+				kit.OnUsedFunctionName = "UseWeaponKit"
+				if SetWeaponKitUseText then SetWeaponKitUseText(kit) end
+				UseableOn({ Id = kit.ObjectId })
+				SetAlpha({ Id = kit.ObjectId, Fraction = 1.0 })
+			end
+		end)
+		print("[HadesII_AP] Gave weapon: " .. item_name .. " (" .. weapon .. ")")
+		return true
+	end
+	-- Hidden aspects: set WeaponsUnlocked only (same shop-slot reasoning as tools).
+	local aspect = HIDDEN_ASPECT_ITEM_TO_NAME and HIDDEN_ASPECT_ITEM_TO_NAME[item_name]
+	if aspect then
+		GameState.WeaponsUnlocked[aspect]        = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[aspect] = true
+		end
+		-- Refresh the kit's aspect prompt if the player is at the kit when it arrives.
+		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
+		print("[HadesII_AP] Gave hidden aspect: " .. item_name .. " (" .. aspect .. ")")
+		return true
+	end
+	-- Base + standard aspects: same WeaponsUnlocked delivery as hidden aspects.
+	local base_std = (STANDARD_ASPECT_ITEM_TO_NAME and STANDARD_ASPECT_ITEM_TO_NAME[item_name])
+		or (BASE_ASPECT_ITEM_TO_NAME and BASE_ASPECT_ITEM_TO_NAME[item_name])
+	if base_std then
+		GameState.WeaponsUnlocked[base_std] = true
+		if CurrentRun then
+			CurrentRun.WeaponsUnlocked = CurrentRun.WeaponsUnlocked or {}
+			CurrentRun.WeaponsUnlocked[base_std] = true
+		end
+		pcall(function() if UpdateWeaponKits then UpdateWeaponKits() end end)
+		print("[HadesII_AP] Gave aspect: " .. item_name .. " (" .. base_std .. ")")
+		return true
+	end
+	-- Prophecies: grant the resource the vanilla cashout would have awarded.
+	local quest_id = PROPHECY_QUEST_FOR_ITEM and PROPHECY_QUEST_FOR_ITEM[item_name]
+	if quest_id then
+		local questData = QuestData and QuestData[quest_id]
+		local resource = questData and questData.RewardResourceName
+		local amount = questData and questData.RewardResourceAmount
+		if resource and amount then
+			AddResource(resource, amount, _PLUGIN.guid, { SkipVoiceLines = true })
+			print("[HadesII_AP] Gave prophecy reward: " .. item_name
+				.. " (" .. amount .. "x " .. resource .. ")")
+		else
+			print("[HadesII_AP] Prophecy reward missing data: " .. item_name
+				.. " (quest=" .. tostring(quest_id) .. ")")
+		end
+		return true
+	end
+	-- Unknown item — log and advance items_index so it isn't re-processed.
+	print("[HadesII_AP] Received (pending implementation): " .. tostring(item_name))
+	return true
+end
+
+-- ── Inbox processing ──────────────────────────────────────────────────────────
+
+-- DeathLink: deathlink_seq ensures each death only triggers once across polls.
+local function process_deathlink(inbox)
+	if not inbox.deathlink then return end
+	local seq = inbox.deathlink_seq or 0
+	local state = H2AP_LoadState()
+	if seq ~= (state.last_deathlink_seq or -1) then
+		state.last_deathlink_seq = seq
+		H2AP_SaveState()
+		if CurrentRun and CurrentRun.Hero and not CurrentRun.Hero.IsDead
+				and CurrentRun.CurrentRoom and not SessionMapState.HandlingDeath then
+			print("[HadesII_AP] DeathLink from: " .. tostring(inbox.deathlink_source or "unknown"))
+			Kill(CurrentRun.Hero, { AttackerName = "DeathLink" })
+		else
+			print("[HadesII_AP] DeathLink received but not in active run — ignored")
+		end
+	end
+end
+
+function H2AP_ProcessInbox()
+	local inbox = H2AP_ReadInbox()
+	if not inbox then return end
+
+	-- Drop the scout cache so consumers see any newly written scout responses.
+	H2AP_InvalidateLocationItemsCache()
+
+	process_deathlink(inbox)
+
+	-- Grant items in index order, skipping ones already processed.
+	local state   = H2AP_LoadState()
+	local items   = inbox.items or {}
+	local granted = 0
+
+	for _, item in ipairs(items) do
+		local idx = item.index
+		if idx ~= nil and idx >= state.items_index then
+			if H2AP_GiveItem(item.item_name or "") then
+				state.items_index = idx + 1
+				granted = granted + 1
+				H2AP_NotifyReceived(item)
+			end
+		end
+	end
+
+	if granted > 0 then
+		print("[HadesII_AP] Granted " .. granted .. " item(s) from AP")
+		H2AP_SaveState()
+		H2AP_FlushOutbox()
+	end
+
+	-- Sync story flags and shrine levels on every poll (both idempotent).
+	H2AP_SyncStoryFlags(inbox)
+	H2AP_ApplyShrineLevels()
+end
+
+-- Start the inbox polling thread once; called on the first SetupMap because thread() needs SessionMapState.
+local _polling_started = false
+function H2AP_StartInboxPolling()
+	if _polling_started then return end
+	_polling_started = true
+	-- Persist=true survives LoadMap/KillNonPersistentThreads so we only need to start once.
+	thread(function()
+		while true do
+			wait(0.5, "AP_Inbox_Poll", true)
+			H2AP_ProcessInbox()
+		end
+	end)
+end
+
+-- Log the current progress counters on map load.
+function H2AP_LogProgress()
+	local state = H2AP_LoadState()
+	print("[HadesII_AP] Map loaded — score: " .. state.score
+		.. ", checks: " .. state.checks_sent
+		.. ", items: "  .. state.items_index)
+end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+function H2AP_NotifySent(location_name)
+	local text = "Sent: " .. tostring(location_name)
+	local entry = H2AP_GetLocationItem(location_name)
+	if type(entry) == "table" and entry.is_local == false then
+		local who = entry.player_name
+		if type(who) == "string" and who ~= "" then
+			text = text .. " -> " .. who
+			local game = entry.sender_game
+			if type(game) == "string" and game ~= "" then
+				text = text .. " (" .. game .. ")"
+			end
+		end
+	end
+	H2AP_Notify(text, COLOR_SENT)
+end
+
+-- Accepts an item_name string or the full inbox entry table; remote items get a "from <Player> (<Game>)" suffix.
+function H2AP_NotifyReceived(item)
+	local item_name, player_name, sender_game, is_local
+	if type(item) == "table" then
+		item_name   = item.item_name
+		player_name = item.player_name
+		sender_game = item.sender_game
+		is_local    = item.is_local
+	else
+		item_name = item
+	end
+	item_name = tostring(item_name or "")
+
+	local settings = H2AP_LoadSettings() or {}
+	local filler = FILLER_ITEMS and FILLER_ITEMS[item_name]
+	local text
+	if filler then
+		local amount = settings[filler.setting] or 1
+		text = "Received: " .. amount .. "x " .. item_name
+	else
+		text = "Received: " .. item_name
+	end
+
+	if is_local == false and type(player_name) == "string" and player_name ~= "" then
+		text = text .. " from " .. player_name
+		if type(sender_game) == "string" and sender_game ~= "" then
+			text = text .. " (" .. sender_game .. ")"
+		end
+	end
+
+	H2AP_Notify(text, COLOR_RECEIVED)
 end

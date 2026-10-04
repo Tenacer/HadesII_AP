@@ -1,8 +1,15 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── In-game notification toasts (mod-owned, ID-safe) ─────────────────────────
--- Deliberately avoids ModUtil.Hades.PrintStack, whose stale-id Destroy churn can delete live world objects (soft-lock); each toast here owns and destroys only its own component.
+-- Shared helpers that don't belong to a single feature: AP icon, text labels, check banner and toasts.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
+
+-- Animation name for our custom AP logo, packed in Tenacer_AP-HadesII_AP.pkg.
+AP_ICON_ANIM = _PLUGIN.guid .. "\\ap_icon"
+
+-- Path of our texture package holding the AP icon.
+local AP_ICON_PKG = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
 
 local NOTIFY_DEFAULTS = {
 	delay    = 5.0,
@@ -13,11 +20,6 @@ local NOTIFY_DEFAULTS = {
 	bgcol    = { 0.0745, 0.1020, 0.0980, 0.75 },
 }
 
-local COLOR_SENT     = { 0.55, 0.85, 1.00, 1.00 }
-local COLOR_RECEIVED = { 0.65, 1.00, 0.65, 1.00 }
-local COLOR_SCORE    = { 0.85, 0.85, 0.85, 1.00 }
-local COLOR_MSTONE   = { 1.00, 0.85, 0.45, 1.00 }
-
 -- Toast layout: slots stack upward from a fixed anchor near the bottom-left; existing toasts never move.
 local NOTIFY_GROUP   = "H2AP_Notify"
 local NOTIFY_ROW_H   = 30
@@ -25,13 +27,79 @@ local NOTIFY_MAX     = 12
 local NOTIFY_BASE_X  = 420
 local NOTIFY_BASE_DY = 220   -- pixels above the screen bottom for slot 0
 
+-- Bounded FIFO queue of toasts waiting for a free slot; overflow sheds the oldest.
+local NOTIFY_PENDING_MAX = 128
+local NOTIFY_RECLAIM_GRACE = 1.0   -- secs past a toast's lifetime before forced reclaim
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
+-- Load our texture package; called at startup and every room since the game may evict it.
+function H2AP_LoadIconPackage()
+	LoadPackages({ Name = AP_ICON_PKG })
+end
+
+function sjson_ShellText(data)
+	for _, v in ipairs(data.Texts) do
+		if v.Id == 'MainMenuScreen_PlayGame' then
+			v.DisplayName = 'Play Hades II AP'
+			break
+		end
+	end
+end
+
+-- Inject the "AP Check Sent" banner title used by the check banner.
+function H2AP_AddCheckSentText(data)
+	data.Texts[#data.Texts + 1] = { Id = "APCheckSent", DisplayName = "AP Check Sent" }
+end
+
+-- Rewrite a text entry to advertise the scouted AP item at `ap_location`, preserving the vanilla name/description.
+function H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
+	local item_entry = location_items[ap_location]
+	local display = "AP Location Check"
+	if type(item_entry) == "table" then
+		display = item_entry.display or item_entry.item_name or display
+	elseif type(item_entry) == "string" then
+		-- Back-compat with the older flat string format.
+		display = item_entry
+	end
+	local vanilla_name = entry.DisplayName
+	local vanilla_desc = entry.Description
+	local opener = (vanilla_name and vanilla_name ~= "") and vanilla_name or display
+	local new_desc = "Archipelago location check for " .. opener .. "."
+	if vanilla_desc and vanilla_desc ~= "" then
+		new_desc = new_desc .. "\n\nOriginal: " .. vanilla_desc
+	end
+	entry.DisplayName = display
+	entry.Description = new_desc
+end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+-- Show the AP logo banner when a location check fires.
+function H2AP_ShowCheckSentBanner()
+	thread(function()
+		DisplayInfoBanner(nil, {
+			TitleText = "APCheckSent",
+			FontScale = 0.82,
+			Icon = AP_ICON_ANIM,
+			IconScale = 1.3,
+			IconMoveSpeed = 0.00001,
+			IconOffsetY = 6,
+			AnimationName = "InfoBannerCauldronIn",
+			AnimationOutName = "InfoBannerCauldronOut",
+			IconBackingAnimationName = "LocationBackingIrisSmallSubtitleIn",
+			IconBackingAnimationOutName = "LocationBackingIrisSmallSubtitleOut",
+		})
+	end)
+end
+
+-- ── Notification toasts (mod-owned, ID-safe) ─────────────────────────────────
+-- Deliberately avoids ModUtil.Hades.PrintStack, whose stale-id Destroy churn can delete live world objects (soft-lock); each toast here owns and destroys only its own component.
+
 -- slot index (1..NOTIFY_MAX) → deadline while occupied, nil when free; deadlines (not booleans) let slots self-heal when a map load kills the toast thread before it releases its slot.
 local notify_slots = {}
 
--- Bounded FIFO queue of toasts waiting for a free slot; overflow sheds the oldest.
 local notify_pending = {}
-local NOTIFY_PENDING_MAX = 128
-local NOTIFY_RECLAIM_GRACE = 1.0   -- secs past a toast's lifetime before forced reclaim
 
 local function notify_now()
 	return _worldTime or 0
@@ -133,69 +201,4 @@ function H2AP_Notify(text, color, delay, sound)
 		NOTIFY_DEFAULTS.bgcol,
 		(config and config.notify_font_size) or NOTIFY_DEFAULTS.fontsize,
 		NOTIFY_DEFAULTS.font)
-end
-
-function H2AP_NotifySent(location_name)
-	local text = "Sent: " .. tostring(location_name)
-	local entry = H2AP_GetLocationItem(location_name)
-	if type(entry) == "table" and entry.is_local == false then
-		local who = entry.player_name
-		if type(who) == "string" and who ~= "" then
-			text = text .. " -> " .. who
-			local game = entry.sender_game
-			if type(game) == "string" and game ~= "" then
-				text = text .. " (" .. game .. ")"
-			end
-		end
-	end
-	H2AP_Notify(text, COLOR_SENT)
-end
-
--- Accepts an item_name string or the full inbox entry table; remote items get a "from <Player> (<Game>)" suffix.
-function H2AP_NotifyReceived(item)
-	local item_name, player_name, sender_game, is_local
-	if type(item) == "table" then
-		item_name   = item.item_name
-		player_name = item.player_name
-		sender_game = item.sender_game
-		is_local    = item.is_local
-	else
-		item_name = item
-	end
-	item_name = tostring(item_name or "")
-
-	local settings = H2AP_LoadSettings() or {}
-	local filler = FILLER_ITEMS and FILLER_ITEMS[item_name]
-	local text
-	if filler then
-		local amount = settings[filler.setting] or 1
-		text = "Received: " .. amount .. "x " .. item_name
-	else
-		text = "Received: " .. item_name
-	end
-
-	if is_local == false and type(player_name) == "string" and player_name ~= "" then
-		text = text .. " from " .. player_name
-		if type(sender_game) == "string" and sender_game ~= "" then
-			text = text .. " (" .. sender_game .. ")"
-		end
-	end
-
-	H2AP_Notify(text, COLOR_RECEIVED)
-end
-
--- Score ticks fire every cleared room, so no sound; route_label is shown in separate split mode, nil in combined.
-function H2AP_NotifyScore(delta, total, route_label, to_next)
-	local route = route_label and (route_label .. " ") or ""
-	local label = route_label and (route_label .. " score") or "Total score"
-	local tail = to_next and ("  (" .. tostring(to_next) .. " to next check)") or ""
-	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total) .. tail,
-		COLOR_SCORE, nil, "")
-end
-
--- Announce an unlocked score check against its route's budget (route_label nil in combined mode).
-function H2AP_NotifyMilestone(checks_sent, budget, route_label)
-	local prefix = route_label and (route_label .. " score check") or "Score check"
-	H2AP_Notify(prefix .. " unlocked (" .. checks_sent .. "/" .. budget .. ")",
-		COLOR_MSTONE)
 end

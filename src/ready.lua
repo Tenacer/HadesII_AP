@@ -6,30 +6,26 @@
 -- ── Library modules (pure definitions) ────────────────────────────────────────
 
 import 'lib/json.lua'
+import 'lib/utils.lua'
 import 'lib/ipc.lua'
-import 'lib/state.lua'
 import 'lib/IncantationData.lua'
 import 'lib/ProphecyData.lua'
 import 'lib/hints.lua'
 import 'lib/ItemData.lua'
-import 'lib/notify.lua'
 import 'lib/story.lua'
 import 'lib/fear.lua'
 import 'lib/tools.lua'
 import 'lib/familiar.lua'
 import 'lib/traphelper.lua'
 import 'lib/qol.lua'
-import 'lib/items.lua'
 import 'lib/bossreward.lua'
 import 'lib/score.lua'
 import 'lib/death.lua'
-import 'lib/inbox.lua'
 
 -- ── AP icon package ──────────────────────────────────────────────────────────
 
 -- Load our texture package so the AP icon animation is available.
-local ap_icon_pkg = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
-LoadPackages({ Name = ap_icon_pkg })
+H2AP_LoadIconPackage()
 
 -- ── Text patches ──────────────────────────────────────────────────────────────
 
@@ -40,6 +36,7 @@ end)
 
 local helpfile = rom.path.combine(rom.paths.Content, 'Game/Text/en/HelpText.en.sjson')
 sjson.hook(helpfile, function(data)
+	H2AP_AddCheckSentText(data)
 	return sjson_HelpText(data)
 end)
 
@@ -118,7 +115,7 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 		end
 		CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
 		H2AP_CheckLocation(ap_location)
-		H2AP_ShowBossRewardBanner()
+		H2AP_ShowCheckSentBanner()
 		return
 	end
 
@@ -135,7 +132,7 @@ modutil.mod.Path.Wrap("HandleGhostAdminPurchase", function(base, screen, button)
 		end
 		CloseGhostAdminScreen(screen, screen.Components.CloseButton, {})
 		H2AP_CheckLocation(ap_location)
-		H2AP_ShowBossRewardBanner()
+		H2AP_ShowCheckSentBanner()
 		return
 	end
 
@@ -182,7 +179,7 @@ modutil.mod.Path.Wrap("FamiliarRecruitPresentation", function(base, usee, args)
 			CurrentRun.FamiliarsUnlocked[name] = nil
 		end
 	end
-	H2AP_ShowBossRewardBanner()
+	H2AP_ShowCheckSentBanner()
 end)
 
 -- ── Keepsake equip screen unlock fix ─────────────────────────────────────────

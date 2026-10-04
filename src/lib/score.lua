@@ -352,3 +352,24 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 	-- Regular rooms: credit room-clear score.
 	credit_room_score(currentRoom, currentEncounter)
 end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+local COLOR_SCORE    = { 0.85, 0.85, 0.85, 1.00 }
+local COLOR_MSTONE   = { 1.00, 0.85, 0.45, 1.00 }
+
+-- Score ticks fire every cleared room, so no sound; route_label is shown in separate split mode, nil in combined.
+function H2AP_NotifyScore(delta, total, route_label, to_next)
+	local route = route_label and (route_label .. " ") or ""
+	local label = route_label and (route_label .. " score") or "Total score"
+	local tail = to_next and ("  (" .. tostring(to_next) .. " to next check)") or ""
+	H2AP_Notify("+" .. tostring(delta) .. " " .. route .. "pts. " .. label .. ": " .. tostring(total) .. tail,
+		COLOR_SCORE, nil, "")
+end
+
+-- Announce an unlocked score check against its route's budget (route_label nil in combined mode).
+function H2AP_NotifyMilestone(checks_sent, budget, route_label)
+	local prefix = route_label and (route_label .. " score check") or "Score check"
+	H2AP_Notify(prefix .. " unlocked (" .. checks_sent .. "/" .. budget .. ")",
+		COLOR_MSTONE)
+end

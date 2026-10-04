@@ -39,28 +39,26 @@ end
 
 -- ── Contested game-function wraps ─────────────────────────────────────────────
 -- Globals also hooked by other installed mods register here (after on_all_mods_loaded) for deterministic wrap-chain order.
-local ap_icon_pkg = rom.path.combine(_PLUGIN.plugins_data_mod_folder_path, _PLUGIN.guid)
 
--- Start-of-room processing; the inbox polling thread starts on the first SetupMap because thread() needs SessionMapState.
-local _polling_started = false
+-- Start-of-room processing in a fixed order; each callee guards against a nil GameState on first launch.
 modutil.mod.Path.Wrap("SetupMap", function(base, ...)
-	-- Reload the package (game may evict it) and re-patch icons each room.
-	LoadPackages({ Name = ap_icon_pkg })
+	H2AP_LoadIconPackage()
 	H2AP_PatchIncantationIcons()
 	H2AP_PatchSurfaceIncantationReveal()
 	H2AP_PatchIncantationCosts()
 	H2AP_PatchFamiliarGates()
-	H2AP_SetupMap()
-	if not _polling_started then
-		_polling_started = true
-		-- Persist=true survives LoadMap/KillNonPersistentThreads so we only need to start once.
-		thread(function()
-			while true do
-				wait(0.5, "AP_Inbox_Poll", true)
-				H2AP_ProcessInbox()
-			end
-		end)
-	end
+	H2AP_LogProgress()
+	H2AP_ApplyShrineLevels()
+	H2AP_PatchVowRequirements()
+	H2AP_InitWeaponState()
+	H2AP_ApplyAspectSystemUnlock()
+	H2AP_InitBaseAspectShop()
+	H2AP_GrantInitialAspect()
+	H2AP_ApplyUnlockBroker()
+	H2AP_ProcessInbox()
+	H2AP_CheckQuestCompletions()
+	H2AP_ProcessTrapQueue()
+	H2AP_StartInboxPolling()
 	return base(...)
 end)
 
@@ -150,7 +148,7 @@ modutil.mod.Path.Wrap("HandleWeaponShopPurchase", function(base, screen, button)
 			-- Pass the CloseButton so the camera pans back to Melinoë instead of staying stuck on the shop.
 			CloseWeaponShopScreen(screen, screen.Components.CloseButton or button, {})
 			H2AP_CheckLocation(ap_location)
-			H2AP_ShowBossRewardBanner()
+			H2AP_ShowCheckSentBanner()
 			return
 		end
 	end
