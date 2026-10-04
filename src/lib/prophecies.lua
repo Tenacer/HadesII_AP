@@ -1,7 +1,9 @@
 ---@meta _
 ---@diagnostic disable: lowercase-global
 
--- ── Prophecy (Fated List Quest) locations ─────────────────────────────────────
+-- Prophecies (Fated List quests): fatesanity location checks, hints and reward delivery.
+
+-- ═══ Data ════════════════════════════════════════════════════════════════════
 
 -- Maps internal Quest ID → AP location name (= Fated List Quest display name + " Check").
 PROPHECY_LOCATIONS = {
@@ -98,4 +100,108 @@ PROPHECY_QUEST_FOR_ITEM = {}
 for quest_id, location in pairs(PROPHECY_LOCATIONS) do
 	local base = location:gsub(" Check$", "")
 	PROPHECY_QUEST_FOR_ITEM[base .. " Reward"] = quest_id
+end
+
+-- ═══ Logic ═══════════════════════════════════════════════════════════════════
+
+-- CashOutQuest wrap: under fatesanity, replicate CashOutQuest minus its AddResource, which the AP item delivers instead.
+function H2AP_OnCashOutQuest(base, screen, button)
+	local settings = H2AP_LoadSettings()
+	local questData = button and button.Data
+	local quest_name = questData and questData.Name
+	local ap_location = quest_name and PROPHECY_LOCATIONS[quest_name]
+	if not (settings and settings.fatesanity == 1 and ap_location) then
+		return base(screen, button)
+	end
+	if questData.CompleteGameStateRequirements ~= nil
+			and not IsGameStateEligible(questData, questData.CompleteGameStateRequirements) then
+		return
+	end
+	button.OnPressedFunctionName = nil
+	if GameState.QuestStatus[quest_name] ~= "CashedOut" then
+		H2AP_CheckLocation(ap_location)
+		GameState.QuestStatus[quest_name] = "CashedOut"
+		QuestCashedOutPresentation(screen, button)
+	end
+	StopFlashing({ Id = button.Id })
+	local justCashedOutFormat = screen.JustCashedOutFormat
+	justCashedOutFormat.Id = button.Id
+	ModifyTextBox(justCashedOutFormat)
+	SetAlpha({ Id = screen.Components.RewardText.Id, Fraction = 0.0, Duration = 0.2 })
+	local animationName = screen.Components.RewardClaimedIcon.AnimationName
+	if questData.InterstitialData ~= nil then
+		animationName = screen.Components.RewardClaimedIcon.SpecialAnimationName
+	end
+	SetAnimation({ DestinationId = screen.Components.RewardClaimedIcon.Id, Name = animationName })
+	SetAlpha({ Id = screen.Components.RewardClaimedIcon.Id, Fraction = 1.0, Duration = 0.2 })
+end
+
+-- OpenQuestLogScreen wrap: hint each visible prophecy when the Fated List opens.
+function H2AP_OnOpenQuestLog(base, args)
+	local result = base(args)
+	H2AP_HintQuestlogVisible()
+	return result
+end
+
+-- Hint visible (non-cashed-out) prophecies.
+function H2AP_HintQuestlogVisible()
+	local settings = H2AP_LoadSettings()
+	if not (settings and settings.fatesanity == 1) then return end
+	if not (QuestOrderData and QuestData and GameState and GameState.QuestStatus) then return end
+	for _, questName in ipairs(QuestOrderData) do
+		local questData = QuestData[questName]
+		if questData then
+			local ap_location = PROPHECY_LOCATIONS[questData.Name]
+			if ap_location and GameState.QuestStatus[questData.Name] ~= "CashedOut" then
+				if IsGameStateEligible(questData, questData.UnlockGameStateRequirements) then
+					H2AP_HintLocation(ap_location)
+				end
+			end
+		end
+	end
+end
+
+-- Backstop for the CashOutQuest override, catching any cashout that slipped through.
+function H2AP_CheckQuestCompletions()
+	local settings = H2AP_LoadSettings()
+	if not (settings and settings.fatesanity == 1) then return end
+	if not (GameState and GameState.QuestStatus) then return end
+	for quest_id, location in pairs(PROPHECY_LOCATIONS) do
+		if GameState.QuestStatus[quest_id] == "CashedOut" then
+			H2AP_CheckLocation(location)
+		end
+	end
+end
+
+-- Prophecy rewards grant the resource the vanilla cashout would have awarded; returns nil when the item isn't a prophecy reward.
+function H2AP_ProphecyGiveItem(item_name)
+	local quest_id = PROPHECY_QUEST_FOR_ITEM[item_name]
+	if not quest_id then return nil end
+	local questData = QuestData and QuestData[quest_id]
+	local resource = questData and questData.RewardResourceName
+	local amount = questData and questData.RewardResourceAmount
+	if resource and amount then
+		AddResource(resource, amount, _PLUGIN.guid, { SkipVoiceLines = true })
+		print("[HadesII_AP] Gave prophecy reward: " .. item_name
+			.. " (" .. amount .. "x " .. resource .. ")")
+	else
+		print("[HadesII_AP] Prophecy reward missing data: " .. item_name
+			.. " (quest=" .. tostring(quest_id) .. ")")
+	end
+	return true
+end
+
+-- ═══ Presentation ════════════════════════════════════════════════════════════
+
+-- Replace prophecy names/descriptions in HelpText with the scouted AP item under fatesanity.
+function H2AP_ProphecyRelabelHelpText(data)
+	local settings = H2AP_LoadSettings() or {}
+	if settings.fatesanity ~= 1 then return end
+	local location_items = H2AP_ReadLocationItems() or {}
+	for _, entry in ipairs(data.Texts) do
+		local ap_location = entry.Id and PROPHECY_LOCATIONS[entry.Id]
+		if ap_location then
+			H2AP_ApplyApLocationLabel(entry, ap_location, location_items)
+		end
+	end
 end

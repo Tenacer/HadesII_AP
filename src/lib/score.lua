@@ -292,12 +292,7 @@ function H2AP_OnRoomCleared(currentRoom, currentEncounter)
 		local field = boss_key .. "_kills"
 		state[field] = (state[field] or 0) + 1
 
-		-- Record an un-fakeable "Typhon beaten with Storm Stop" flag; vanilla's TyphonDefeatedWithStormStop can't be trusted since the Entropy grant fakes it.
-		if boss_key == "typhon"
-				and GameState and GameState.WorldUpgradesAdded
-				and GameState.WorldUpgradesAdded.WorldUpgradeStormStop then
-			GameState.AP_TyphonKilledWithStormStop = true
-		end
+		H2AP_RecordStormStopKill(boss_key)
 
 		-- Record a distinct weapon clear and fire its "<Weapon> Clear" check under weaponsanity.
 		if type(GetEquippedWeapon) == "function" then

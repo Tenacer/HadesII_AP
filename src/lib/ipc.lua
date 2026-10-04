@@ -283,36 +283,8 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave " .. amount .. "x " .. item_name)
 		return true
 	end
-	-- Incantations deliver their effect from the received AP item; the location check fires on brew.
-	local wu_key = INCANTATION_KEY_FOR_NAME[item_name]
-	if wu_key then
-		local settings = H2AP_LoadSettings()
-		if H2AP_IsApKeyedIncantation(wu_key, settings) then
-			-- Surface-lock: grant only WorldUpgrades so the brew/story sequence stays alive; SurfacePenaltyCure also needs WorldUpgradesAdded since part of its cure is gated on it.
-			GameState.WorldUpgrades[wu_key]       = true
-			GameState.WorldUpgradesViewed[wu_key] = true
-			if wu_key == "WorldUpgradeSurfacePenaltyCure" then
-				GameState.WorldUpgradesAdded[wu_key]    = true
-				GameState.WorldUpgradesRevealed[wu_key] = true
-				if CurrentRun and CurrentRun.WorldUpgradesAdded then
-					CurrentRun.WorldUpgradesAdded[wu_key] = true
-				end
-			end
-			print("[HadesII_AP] Incantation effect granted: " .. item_name)
-			return true
-		end
-		-- Cauldronsanity 86: apply effect directly (vanilla brew is suppressed).
-		GameState.WorldUpgrades[wu_key]         = true
-		GameState.WorldUpgradesAdded[wu_key]    = true
-		GameState.WorldUpgradesViewed[wu_key]   = true
-		GameState.WorldUpgradesRevealed[wu_key] = true
-		local itemData = WorldUpgradeData and WorldUpgradeData[wu_key]
-		if itemData and itemData.OnActivateFinishedFunctionName then
-			pcall(CallFunctionName, itemData.OnActivateFinishedFunctionName, itemData.OnActivateFinishedFunctionArgs)
-		end
-		print("[HadesII_AP] Incantation unlocked: " .. item_name)
-		return true
-	end
+	local handled = H2AP_CauldronGiveItem(item_name)
+	if handled ~= nil then return handled end
 	-- True Ending ingredients: grant the resource and let H2AP_SyncStoryFlags handle flags.
 	if item_name == "Zodiac Sand" then
 		AddResource("MixerIBoss", 1, _PLUGIN.guid)
@@ -414,22 +386,8 @@ function H2AP_GiveItem(item_name)
 		print("[HadesII_AP] Gave aspect: " .. item_name .. " (" .. base_std .. ")")
 		return true
 	end
-	-- Prophecies: grant the resource the vanilla cashout would have awarded.
-	local quest_id = PROPHECY_QUEST_FOR_ITEM and PROPHECY_QUEST_FOR_ITEM[item_name]
-	if quest_id then
-		local questData = QuestData and QuestData[quest_id]
-		local resource = questData and questData.RewardResourceName
-		local amount = questData and questData.RewardResourceAmount
-		if resource and amount then
-			AddResource(resource, amount, _PLUGIN.guid, { SkipVoiceLines = true })
-			print("[HadesII_AP] Gave prophecy reward: " .. item_name
-				.. " (" .. amount .. "x " .. resource .. ")")
-		else
-			print("[HadesII_AP] Prophecy reward missing data: " .. item_name
-				.. " (quest=" .. tostring(quest_id) .. ")")
-		end
-		return true
-	end
+	handled = H2AP_ProphecyGiveItem(item_name)
+	if handled ~= nil then return handled end
 	-- Unknown item — log and advance items_index so it isn't re-processed.
 	print("[HadesII_AP] Received (pending implementation): " .. tostring(item_name))
 	return true
